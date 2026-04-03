@@ -11,6 +11,7 @@ from graph.orchestrator import run_task
 
 TASKS = {
     "content": "content_planning",
+    "design": "design_review",
     "images": "image_generation",
     "analytics": "analytics",
     "leads": "lead_gen",
@@ -91,6 +92,7 @@ def main():
     print("Usage:")
     print("  python main.py interactive     - Chat with a specific agent")
     print("  python main.py content         - Run content planning")
+    print("  python main.py design          - Run design review on drafts")
     print("  python main.py images          - Generate images for drafts")
     print("  python main.py analytics       - Run analytics")
     print("  python main.py leads           - Run lead generation")

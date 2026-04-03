@@ -111,6 +111,10 @@ async def main():
     scheduler.add_job(safe_run, "cron", day_of_week="mon", hour=7,
                       args=["content_planning", bot], id="content_planning")
 
+    # Design review: Monday 08:00 (after content planning)
+    scheduler.add_job(safe_run, "cron", day_of_week="mon", hour=8,
+                      args=["design_review", bot], id="design_review")
+
     # Image generation: every 6 hours (processes drafts)
     scheduler.add_job(safe_run, "cron", hour="*/6",
                       args=["image_generation", bot], id="image_generation")

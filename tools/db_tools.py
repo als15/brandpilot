@@ -84,6 +84,46 @@ def db_update_post_status(post_id: int, status: str, instagram_media_id: str = "
     return f"Post {post_id} status updated to '{status}'."
 
 
+@tool
+def db_revise_content_item(
+    post_id: int,
+    caption: str = "",
+    hashtags: str = "",
+    visual_direction: str = "",
+    notes: str = "",
+) -> str:
+    """Revise a content queue item's caption, visual direction, hashtags, or add review notes.
+    Only updates fields that are provided (non-empty).
+    Args:
+        post_id: The content queue item ID.
+        caption: Revised caption text (optional).
+        hashtags: Revised hashtags (optional).
+        visual_direction: Revised image prompt direction (optional).
+        notes: Design review notes or feedback (optional).
+    """
+    db = get_db()
+    updates = []
+    params = []
+    if caption:
+        updates.append("caption = ?")
+        params.append(caption)
+    if hashtags:
+        updates.append("hashtags = ?")
+        params.append(hashtags)
+    if visual_direction:
+        updates.append("visual_direction = ?")
+        params.append(visual_direction)
+    if notes:
+        updates.append("notes = ?")
+        params.append(notes)
+    if not updates:
+        return "No updates provided."
+    params.append(post_id)
+    db.execute(f"UPDATE content_queue SET {', '.join(updates)} WHERE id = ?", params)
+    db.commit()
+    return f"Post {post_id} revised: updated {', '.join(f.split(' =')[0] for f in updates)}."
+
+
 # ── Leads Tools ──────────────────────────────────────────────────────
 
 @tool

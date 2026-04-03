@@ -30,6 +30,19 @@ def content_strategist_node(state: OrchestratorState) -> dict:
     )
 
 
+def design_review_node(state: OrchestratorState) -> dict:
+    from agents.design_supervisor import create_design_supervisor
+
+    return _run_agent(
+        create_design_supervisor,
+        "Review all draft posts in the content queue for brand consistency. "
+        "Check captions (Hebrew tone, premium voice), visual directions (earthy, minimal, warm), "
+        "and overall brand alignment. For posts that need changes, revise them directly. "
+        "Add review notes to each post explaining your assessment.",
+        state,
+    )
+
+
 def image_generator_node(state: OrchestratorState) -> dict:
     from agents.image_generator import create_image_generator
 
@@ -91,6 +104,7 @@ def content_publisher_node(state: OrchestratorState) -> dict:
 def router(state: OrchestratorState) -> str:
     routing = {
         "content_planning": "content_strategist",
+        "design_review": "design_supervisor",
         "image_generation": "image_generator",
         "analytics": "analytics_agent",
         "lead_gen": "lead_generator",
@@ -106,6 +120,7 @@ def build_orchestrator():
     graph = StateGraph(OrchestratorState)
 
     graph.add_node("content_strategist", content_strategist_node)
+    graph.add_node("design_supervisor", design_review_node)
     graph.add_node("image_generator", image_generator_node)
     graph.add_node("analytics_agent", analytics_node)
     graph.add_node("lead_generator", lead_generator_node)
@@ -116,6 +131,7 @@ def build_orchestrator():
 
     for node in [
         "content_strategist",
+        "design_supervisor",
         "image_generator",
         "analytics_agent",
         "lead_generator",
