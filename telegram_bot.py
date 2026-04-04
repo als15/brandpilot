@@ -7,7 +7,9 @@ from telegram.ext import (
     Application,
     CommandHandler,
     CallbackQueryHandler,
+    MessageHandler,
     ContextTypes,
+    filters,
 )
 
 from db.connection import get_db
@@ -203,6 +205,24 @@ async def approval_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         log.info(f"Post {post_id} — picked {model_full}, upscaled, approved.")
         return
 
+    if data.startswith("editcap_"):
+        post_id = int(data.split("_", 1)[1])
+        row = db.execute("SELECT topic, status FROM content_queue WHERE id = ?", (post_id,)).fetchone()
+        if not row:
+            await query.edit_message_caption(caption=f"Post {post_id} not found.")
+            return
+        if row["status"] != "pending_approval":
+            await query.edit_message_caption(caption=f"Post {post_id} is already '{row['status']}'.")
+            return
+
+        # Store post_id in user_data so the next text message updates the caption
+        context.user_data["editing_caption_for"] = post_id
+        await query.edit_message_caption(
+            caption=f"Editing caption for: {row['topic']}\n\nSend your new caption as a message."
+        )
+        log.info(f"Post {post_id} — caption edit mode activated.")
+        return
+
     if data.startswith("regen_"):
         _, post_id_str, model_short = data.split("_", 2)
         post_id = int(post_id_str)
@@ -272,11 +292,70 @@ async def approval_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     log.info(f"Post {post_id} approved via Telegram.")
 
 
+# ── Caption Edit Handler ─────────────────────────────────────────────
+
+
+async def caption_edit_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Receive a new caption from the user after they pressed Edit Caption."""
+    if not _authorized(update):
+        return
+
+    post_id = context.user_data.pop("editing_caption_for", None)
+    if post_id is None:
+        return  # Not in edit mode, ignore
+
+    new_caption = update.message.text.strip()
+    db = get_db()
+    row = db.execute(
+        "SELECT topic, status, image_url, image_url_alt FROM content_queue WHERE id = ?",
+        (post_id,),
+    ).fetchone()
+
+    if not row or row["status"] != "pending_approval":
+        await update.message.reply_text(f"Post {post_id} is no longer pending approval.")
+        return
+
+    db.execute("UPDATE content_queue SET caption = ? WHERE id = ?", (new_caption, post_id))
+    db.commit()
+
+    # Re-send the review with updated caption and images
+    review_text = (
+        f"📋 POST #{post_id} — CAPTION UPDATED\n\n"
+        f"Topic: {row['topic']}\n\n"
+        f"━━━ New Caption ━━━\n"
+        f"{new_caption}\n"
+        f"━━━━━━━━━━━━━━━━━━"
+    )
+    await update.message.reply_text(review_text[:4096])
+
+    if row["image_url_alt"]:
+        keyboard = _build_comparison_keyboard(post_id)
+        await context.bot.send_photo(
+            chat_id=update.message.chat_id, photo=row["image_url"], caption="A — flux-2-pro",
+        )
+        await context.bot.send_photo(
+            chat_id=update.message.chat_id, photo=row["image_url_alt"],
+            caption="B — nano-banana-2", reply_markup=keyboard,
+        )
+    else:
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("Approve", callback_data=f"approve_{post_id}"),
+                InlineKeyboardButton("Reject", callback_data=f"reject_{post_id}"),
+            ]
+        ])
+        await context.bot.send_photo(
+            chat_id=update.message.chat_id, photo=row["image_url"],
+            caption="Image", reply_markup=keyboard,
+        )
+    log.info(f"Post {post_id} — caption updated via Telegram.")
+
+
 # ── Notification Senders (called by daemon) ──────────────────────────
 
 
 def _build_comparison_keyboard(post_id: int) -> InlineKeyboardMarkup:
-    """Build the standard pick/regen/reject keyboard for A/B comparison."""
+    """Build the standard pick/regen/reject/edit keyboard for A/B comparison."""
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("Pick A (flux-2-pro)", callback_data=f"pick_{post_id}_flux"),
@@ -286,7 +365,10 @@ def _build_comparison_keyboard(post_id: int) -> InlineKeyboardMarkup:
             InlineKeyboardButton("Regen A", callback_data=f"regen_{post_id}_flux"),
             InlineKeyboardButton("Regen B", callback_data=f"regen_{post_id}_banana"),
         ],
-        [InlineKeyboardButton("Reject Both", callback_data=f"reject_{post_id}")],
+        [
+            InlineKeyboardButton("Edit Caption", callback_data=f"editcap_{post_id}"),
+            InlineKeyboardButton("Reject Both", callback_data=f"reject_{post_id}"),
+        ],
     ])
 
 
@@ -294,17 +376,19 @@ async def notify_pending_approval(
     bot: Bot, post_id: int, topic: str, caption: str,
     image_url: str, image_url_alt: str | None = None,
 ):
-    """Send preview images with pick/regen/reject buttons to Telegram."""
-    preview_text = (
-        f"NEW POST FOR REVIEW\n\n"
-        f"Topic: {topic}\n"
-        f"Caption: {caption[:300]}{'...' if len(caption) > 300 else ''}"
+    """Send preview images with full caption and action buttons to Telegram."""
+    review_text = (
+        f"📋 POST #{post_id} FOR REVIEW\n\n"
+        f"Topic: {topic}\n\n"
+        f"━━━ Caption (will be published) ━━━\n"
+        f"{caption}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     )
 
     if image_url_alt:
         keyboard = _build_comparison_keyboard(post_id)
         try:
-            await bot.send_message(chat_id=_chat_id(), text=preview_text[:4096])
+            await bot.send_message(chat_id=_chat_id(), text=review_text[:4096])
             await bot.send_photo(chat_id=_chat_id(), photo=image_url, caption="A — flux-2-pro")
             await bot.send_photo(
                 chat_id=_chat_id(), photo=image_url_alt,
@@ -313,29 +397,27 @@ async def notify_pending_approval(
         except Exception as e:
             await bot.send_message(
                 chat_id=_chat_id(),
-                text=f"{preview_text}\n\nA: {image_url}\nB: {image_url_alt}",
+                text=f"{review_text}\n\nA: {image_url}\nB: {image_url_alt}",
                 reply_markup=keyboard,
             )
             log.warning(f"Failed to send images for post {post_id}: {e}")
     else:
-        # Single image fallback
         keyboard = InlineKeyboardMarkup([
             [
                 InlineKeyboardButton("Approve", callback_data=f"approve_{post_id}"),
                 InlineKeyboardButton("Reject", callback_data=f"reject_{post_id}"),
             ]
         ])
-
         try:
             await bot.send_photo(
                 chat_id=_chat_id(), photo=image_url,
-                caption=preview_text[:1024],
+                caption=review_text[:1024],
                 reply_markup=keyboard,
             )
         except Exception as e:
             await bot.send_message(
                 chat_id=_chat_id(),
-                text=f"{preview_text}\n\nImage: {image_url}",
+                text=f"{review_text}\n\nImage: {image_url}",
                 reply_markup=keyboard,
             )
             log.warning(f"Failed to send image for post {post_id}: {e}")
@@ -366,6 +448,7 @@ def build_telegram_app() -> Application:
     app.add_handler(CommandHandler("queue", queue_command))
     app.add_handler(CommandHandler("leads", leads_command))
     app.add_handler(CommandHandler("engage", engage_command))
-    app.add_handler(CallbackQueryHandler(approval_callback, pattern=r"^(approve|reject)_\d+$"))
+    app.add_handler(CallbackQueryHandler(approval_callback))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, caption_edit_handler))
 
     return app
