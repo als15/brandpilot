@@ -15,7 +15,6 @@ TABLES = [
         visual_direction TEXT,
         image_url TEXT,
         image_url_alt TEXT,
-        image_candidates TEXT,
         status TEXT DEFAULT 'draft',
         approved_by TEXT,
         approved_at TIMESTAMP,
@@ -99,7 +98,6 @@ TABLES = [
 
 MIGRATIONS = [
     "ALTER TABLE content_queue ADD COLUMN image_url_alt TEXT",
-    "ALTER TABLE content_queue ADD COLUMN image_candidates TEXT",
 ]
 
 

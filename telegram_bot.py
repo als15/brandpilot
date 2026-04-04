@@ -1,6 +1,5 @@
 """Telegram bot for Capa & Co Instagram agent notifications and approvals."""
 
-import json
 import os
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot
@@ -143,7 +142,11 @@ async def approval_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_caption(caption="Unauthorized.")
         return
 
-    # Callback data format: "pick_{post_id}_{model}_{index}" or "reject_{post_id}"
+    # Callback formats:
+    #   pick_{post_id}_{model}   — upscale picked image, approve
+    #   regen_{post_id}_{model}  — regenerate a new image for that model
+    #   reject_{post_id}         — reject post
+    #   approve_{post_id}        — legacy single-image approve
     data = query.data
     db = get_db()
 
@@ -163,13 +166,13 @@ async def approval_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if data.startswith("pick_"):
-        parts = data.split("_")  # pick, postid, model, index
-        post_id = int(parts[1])
-        model_key = parts[2]  # "flux" or "banana"
-        img_index = int(parts[3])
+        _, post_id_str, model_short = data.split("_", 2)
+        post_id = int(post_id_str)
+        model_full = "flux-2-pro" if model_short == "flux" else "nano-banana-2"
 
         row = db.execute(
-            "SELECT topic, status, image_candidates FROM content_queue WHERE id = ?",
+            "SELECT topic, status, image_url, image_url_alt, visual_direction "
+            "FROM content_queue WHERE id = ?",
             (post_id,),
         ).fetchone()
         if not row:
@@ -179,26 +182,75 @@ async def approval_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_caption(caption=f"Post {post_id} is already '{row['status']}'.")
             return
 
-        # Resolve the picked URL from candidates JSON
-        candidates = json.loads(row["image_candidates"])
-        model_full = "flux-2-pro" if model_key == "flux" else "nano-banana-2"
-        picked_url = candidates[model_full][img_index]
+        # Pick the URL for the chosen model
+        picked_url = row["image_url"] if model_short == "flux" else row["image_url_alt"]
+
+        await query.edit_message_caption(caption=f"Upscaling {model_full}...")
+        log.info(f"Post {post_id} — upscaling {model_full}...")
+
+        from tools.image_gen import upscale_and_host
+        final_url = upscale_and_host(picked_url)
 
         db.execute(
             "UPDATE content_queue SET status = 'approved', approved_by = 'telegram', "
-            "approved_at = CURRENT_TIMESTAMP, image_url = ?, image_url_alt = NULL, "
-            "image_candidates = NULL WHERE id = ?",
-            (picked_url, post_id),
+            "approved_at = CURRENT_TIMESTAMP, image_url = ?, image_url_alt = NULL WHERE id = ?",
+            (final_url, post_id),
         )
         db.commit()
-        label = f"{model_full} #{img_index + 1}"
         await query.edit_message_caption(
-            caption=f"PICKED {label}: {row['topic']}\n\nWill be published on next publish run."
+            caption=f"APPROVED ({model_full}): {row['topic']}\n\nUpscaled and ready to publish."
         )
-        log.info(f"Post {post_id} — picked {label} via Telegram.")
+        log.info(f"Post {post_id} — picked {model_full}, upscaled, approved.")
         return
 
-    # Legacy: approve_123 format
+    if data.startswith("regen_"):
+        _, post_id_str, model_short = data.split("_", 2)
+        post_id = int(post_id_str)
+        model_full = "flux-2-pro" if model_short == "flux" else "nano-banana-2"
+
+        row = db.execute(
+            "SELECT topic, status, visual_direction FROM content_queue WHERE id = ?",
+            (post_id,),
+        ).fetchone()
+        if not row:
+            await query.edit_message_caption(caption=f"Post {post_id} not found.")
+            return
+        if row["status"] != "pending_approval":
+            await query.edit_message_caption(caption=f"Post {post_id} is already '{row['status']}'.")
+            return
+
+        await query.edit_message_caption(caption=f"Regenerating {model_full}...")
+        log.info(f"Post {post_id} — regenerating {model_full}...")
+
+        from tools.content_guide import build_image_prompt
+        from tools.image_gen import generate_one
+
+        prompt = build_image_prompt.invoke(row["visual_direction"])
+        new_url = generate_one(prompt, model_full)
+
+        # Update the appropriate URL column
+        col = "image_url" if model_short == "flux" else "image_url_alt"
+        db.execute(f"UPDATE content_queue SET {col} = ? WHERE id = ?", (new_url, post_id))
+        db.commit()
+
+        # Send new image with full buttons again
+        bot = context.bot
+        other_col = "image_url_alt" if model_short == "flux" else "image_url"
+        other_row = db.execute(
+            f"SELECT {other_col}, topic, caption FROM content_queue WHERE id = ?",
+            (post_id,),
+        ).fetchone()
+
+        await bot.send_photo(
+            chat_id=query.message.chat_id,
+            photo=new_url,
+            caption=f"NEW {model_full} for: {row['topic']}",
+            reply_markup=_build_comparison_keyboard(post_id),
+        )
+        log.info(f"Post {post_id} — regenerated {model_full}: {new_url}")
+        return
+
+    # Legacy: approve_{post_id}
     action, post_id_str = data.split("_", 1)
     post_id = int(post_id_str)
     row = db.execute("SELECT topic, status FROM content_queue WHERE id = ?", (post_id,)).fetchone()
@@ -223,71 +275,34 @@ async def approval_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ── Notification Senders (called by daemon) ──────────────────────────
 
 
+def _build_comparison_keyboard(post_id: int) -> InlineKeyboardMarkup:
+    """Build the standard pick/regen/reject keyboard for A/B comparison."""
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("Pick A (flux-2-pro)", callback_data=f"pick_{post_id}_flux"),
+            InlineKeyboardButton("Pick B (nano-banana-2)", callback_data=f"pick_{post_id}_banana"),
+        ],
+        [
+            InlineKeyboardButton("Regen A", callback_data=f"regen_{post_id}_flux"),
+            InlineKeyboardButton("Regen B", callback_data=f"regen_{post_id}_banana"),
+        ],
+        [InlineKeyboardButton("Reject Both", callback_data=f"reject_{post_id}")],
+    ])
+
+
 async def notify_pending_approval(
     bot: Bot, post_id: int, topic: str, caption: str,
     image_url: str, image_url_alt: str | None = None,
-    image_candidates: str | None = None,
 ):
-    """Send candidate images with pick/reject buttons to Telegram."""
+    """Send preview images with pick/regen/reject buttons to Telegram."""
     preview_text = (
         f"NEW POST FOR REVIEW\n\n"
         f"Topic: {topic}\n"
         f"Caption: {caption[:300]}{'...' if len(caption) > 300 else ''}"
     )
 
-    if image_candidates:
-        candidates = json.loads(image_candidates)
-
-        # Build pick buttons: one per candidate image
-        buttons = []
-        model_labels = {"flux-2-pro": "flux", "nano-banana-2": "banana"}
-        for model_key, urls in candidates.items():
-            short = model_labels.get(model_key, model_key)
-            for i in range(len(urls)):
-                buttons.append(
-                    InlineKeyboardButton(
-                        f"{model_key} #{i+1}",
-                        callback_data=f"pick_{post_id}_{short}_{i}",
-                    )
-                )
-        # Arrange 2 buttons per row + reject row
-        button_rows = [buttons[i:i+2] for i in range(0, len(buttons), 2)]
-        button_rows.append([InlineKeyboardButton("Reject All", callback_data=f"reject_{post_id}")])
-        keyboard = InlineKeyboardMarkup(button_rows)
-
-        try:
-            await bot.send_message(chat_id=_chat_id(), text=preview_text[:4096])
-            # Send each candidate image labeled
-            all_photos = []
-            for model_key, urls in candidates.items():
-                for i, url in enumerate(urls):
-                    all_photos.append((f"{model_key} #{i+1}", url))
-
-            for j, (label, url) in enumerate(all_photos):
-                kwargs = {"chat_id": _chat_id(), "photo": url, "caption": label}
-                # Attach keyboard to last photo
-                if j == len(all_photos) - 1:
-                    kwargs["reply_markup"] = keyboard
-                await bot.send_photo(**kwargs)
-        except Exception as e:
-            text_links = "\n".join(
-                f"{label}: {url}" for label, url in all_photos
-            )
-            await bot.send_message(
-                chat_id=_chat_id(),
-                text=f"{preview_text}\n\n{text_links}",
-                reply_markup=keyboard,
-            )
-            log.warning(f"Failed to send images for post {post_id}: {e}")
-    elif image_url_alt:
-        # Legacy: two images without candidates JSON
-        keyboard = InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton("Pick A (flux-2-pro)", callback_data=f"pick_{post_id}_flux_0"),
-                InlineKeyboardButton("Pick B (nano-banana-2)", callback_data=f"pick_{post_id}_banana_0"),
-            ],
-            [InlineKeyboardButton("Reject Both", callback_data=f"reject_{post_id}")],
-        ])
+    if image_url_alt:
+        keyboard = _build_comparison_keyboard(post_id)
         try:
             await bot.send_message(chat_id=_chat_id(), text=preview_text[:4096])
             await bot.send_photo(chat_id=_chat_id(), photo=image_url, caption="A — flux-2-pro")

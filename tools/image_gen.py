@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import base64
 import requests
@@ -6,14 +7,13 @@ import fal_client
 from langchain_core.tools import tool
 from db.connection import get_db
 
-IMAGES_PER_MODEL = 2
+log = logging.getLogger(__name__)
 
 MODELS = {
     "flux-2-pro": {
         "endpoint": "fal-ai/flux-2-pro",
         "args": {
             "image_size": {"width": 2048, "height": 2048},
-            "num_images": IMAGES_PER_MODEL,
             "safety_tolerance": 5,
         },
     },
@@ -22,30 +22,23 @@ MODELS = {
         "args": {
             "resolution": "2K",
             "aspect_ratio": "1:1",
-            "num_images": IMAGES_PER_MODEL,
         },
     },
 }
 
+MODEL_LABELS = {"flux-2-pro": "flux", "nano-banana-2": "banana"}
 
-def _generate_images(prompt: str, model_key: str) -> list[str]:
-    """Call fal.ai to generate images with the given model. Returns list of image URLs."""
+
+def _generate_image(prompt: str, model_key: str) -> str:
+    """Call fal.ai to generate one image. Returns the temporary image URL."""
     os.environ["FAL_KEY"] = os.environ.get("FAL_KEY", "")
 
     model = MODELS[model_key]
-    all_urls = []
-    # Some models (flux-2-pro) ignore num_images, so we call multiple times if needed
-    num_requested = model["args"].get("num_images", 1)
-    args = {**model["args"], "num_images": 1}
-
-    for _ in range(num_requested):
-        result = fal_client.subscribe(
-            model["endpoint"],
-            arguments={"prompt": prompt, **args},
-        )
-        all_urls.extend(img["url"] for img in result["images"])
-
-    return all_urls
+    result = fal_client.subscribe(
+        model["endpoint"],
+        arguments={"prompt": prompt, "num_images": 1, **model["args"]},
+    )
+    return result["images"][0]["url"]
 
 
 def _upscale_image(image_url: str) -> str:
@@ -81,47 +74,44 @@ def _rehost_image(fal_url: str) -> str:
     return _upload_to_imgbb(resp.content)
 
 
-def _generate_upscale_and_host(prompt: str, model_key: str) -> list[str]:
-    """Generate images, upscale each, and rehost. Returns list of permanent URLs."""
-    fal_urls = _generate_images(prompt, model_key)
-    hosted = []
-    for fal_url in fal_urls:
-        upscaled_url = _upscale_image(fal_url)
-        hosted.append(_rehost_image(upscaled_url))
-    return hosted
+def upscale_and_host(image_url: str) -> str:
+    """Upscale an image and rehost it. Returns the permanent public URL."""
+    upscaled_url = _upscale_image(image_url)
+    return _rehost_image(upscaled_url)
+
+
+def generate_one(prompt: str, model_key: str) -> str:
+    """Generate one image, rehost it (no upscale). Returns permanent URL."""
+    fal_url = _generate_image(prompt, model_key)
+    return _rehost_image(fal_url)
 
 
 @tool
 def generate_and_host_image(prompt: str, post_id: int) -> str:
-    """Generate images using two AI models, upscale them, and upload for permanent hosting.
-    Generates multiple candidates per model for comparison via Telegram.
+    """Generate one preview image per model (2 total) for comparison via Telegram.
+    Upscaling happens only after the user picks their favorite.
     Args:
-        prompt: Detailed description of the image to generate. Be specific about composition, style, lighting.
-        post_id: The content queue item ID to update with the generated image.
+        prompt: Detailed description of the image to generate.
+        post_id: The content queue item ID to update with the generated images.
     """
     try:
-        # Generate, upscale, and host images for each model
-        candidates = {}
+        previews = {}
         for model_key in MODELS:
-            candidates[model_key] = _generate_upscale_and_host(prompt, model_key)
-
-        # Store first of each model as primary/alt, full list as JSON for Telegram picker
-        all_candidates = json.dumps(candidates)
+            previews[model_key] = generate_one(prompt, model_key)
 
         db = get_db()
         db.execute(
             "UPDATE content_queue SET image_url = ?, image_url_alt = ?, "
-            "image_candidates = ?, status = 'pending_approval' WHERE id = ?",
-            (candidates["flux-2-pro"][0], candidates["nano-banana-2"][0],
-             all_candidates, post_id),
+            "status = 'pending_approval' WHERE id = ?",
+            (previews["flux-2-pro"], previews["nano-banana-2"], post_id),
         )
         db.commit()
 
-        summary_lines = [f"Images generated and upscaled for post {post_id}."]
-        for model_key, urls in candidates.items():
-            for i, url in enumerate(urls, 1):
-                summary_lines.append(f"  {model_key} #{i}: {url}")
-        return "\n".join(summary_lines)
-
+        return (
+            f"Preview images generated for post {post_id}.\n"
+            f"  A (flux-2-pro): {previews['flux-2-pro']}\n"
+            f"  B (nano-banana-2): {previews['nano-banana-2']}\n"
+            f"User will pick via Telegram, then the winner gets upscaled."
+        )
     except Exception as e:
         return f"Failed to generate image for post {post_id}: {e}"
