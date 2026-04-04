@@ -61,7 +61,8 @@ async def _send_pending_approvals(bot):
     """Send Telegram notifications for posts awaiting approval."""
     db = get_db()
     rows = db.execute(
-        "SELECT id, topic, caption, image_url FROM content_queue "
+        "SELECT id, topic, caption, image_url, image_url_alt, image_candidates "
+        "FROM content_queue "
         "WHERE status = 'pending_approval' AND image_url IS NOT NULL"
     ).fetchall()
 
@@ -72,6 +73,8 @@ async def _send_pending_approvals(bot):
             topic=row["topic"] or "",
             caption=row["caption"] or "",
             image_url=row["image_url"],
+            image_url_alt=row["image_url_alt"],
+            image_candidates=row["image_candidates"],
         )
 
 

@@ -1,5 +1,6 @@
 """Telegram bot for Capa & Co Instagram agent notifications and approvals."""
 
+import json
 import os
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot
@@ -142,77 +143,187 @@ async def approval_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_caption(caption="Unauthorized.")
         return
 
-    data = query.data  # "approve_123" or "reject_123"
-    action, post_id_str = data.split("_", 1)
-    post_id = int(post_id_str)
-
+    # Callback data format: "pick_{post_id}_{model}_{index}" or "reject_{post_id}"
+    data = query.data
     db = get_db()
-    row = db.execute("SELECT topic, status FROM content_queue WHERE id = ?", (post_id,)).fetchone()
 
-    if not row:
-        await query.edit_message_caption(caption=f"Post {post_id} not found.")
-        return
-
-    if row["status"] != "pending_approval":
-        await query.edit_message_caption(
-            caption=f"Post {post_id} is already '{row['status']}'."
-        )
-        return
-
-    if action == "approve":
-        db.execute(
-            "UPDATE content_queue SET status = 'approved', approved_by = 'telegram', "
-            "approved_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (post_id,),
-        )
-        db.commit()
-        await query.edit_message_caption(
-            caption=f"APPROVED: {row['topic']}\n\nWill be published on next publish run."
-        )
-        log.info(f"Post {post_id} approved via Telegram.")
-    else:
-        db.execute(
-            "UPDATE content_queue SET status = 'rejected' WHERE id = ?",
-            (post_id,),
-        )
+    if data.startswith("reject_"):
+        post_id = int(data.split("_", 1)[1])
+        row = db.execute("SELECT topic, status FROM content_queue WHERE id = ?", (post_id,)).fetchone()
+        if not row:
+            await query.edit_message_caption(caption=f"Post {post_id} not found.")
+            return
+        if row["status"] != "pending_approval":
+            await query.edit_message_caption(caption=f"Post {post_id} is already '{row['status']}'.")
+            return
+        db.execute("UPDATE content_queue SET status = 'rejected' WHERE id = ?", (post_id,))
         db.commit()
         await query.edit_message_caption(caption=f"REJECTED: {row['topic']}")
         log.info(f"Post {post_id} rejected via Telegram.")
+        return
+
+    if data.startswith("pick_"):
+        parts = data.split("_")  # pick, postid, model, index
+        post_id = int(parts[1])
+        model_key = parts[2]  # "flux" or "banana"
+        img_index = int(parts[3])
+
+        row = db.execute(
+            "SELECT topic, status, image_candidates FROM content_queue WHERE id = ?",
+            (post_id,),
+        ).fetchone()
+        if not row:
+            await query.edit_message_caption(caption=f"Post {post_id} not found.")
+            return
+        if row["status"] != "pending_approval":
+            await query.edit_message_caption(caption=f"Post {post_id} is already '{row['status']}'.")
+            return
+
+        # Resolve the picked URL from candidates JSON
+        candidates = json.loads(row["image_candidates"])
+        model_full = "flux-2-pro" if model_key == "flux" else "nano-banana-2"
+        picked_url = candidates[model_full][img_index]
+
+        db.execute(
+            "UPDATE content_queue SET status = 'approved', approved_by = 'telegram', "
+            "approved_at = CURRENT_TIMESTAMP, image_url = ?, image_url_alt = NULL, "
+            "image_candidates = NULL WHERE id = ?",
+            (picked_url, post_id),
+        )
+        db.commit()
+        label = f"{model_full} #{img_index + 1}"
+        await query.edit_message_caption(
+            caption=f"PICKED {label}: {row['topic']}\n\nWill be published on next publish run."
+        )
+        log.info(f"Post {post_id} — picked {label} via Telegram.")
+        return
+
+    # Legacy: approve_123 format
+    action, post_id_str = data.split("_", 1)
+    post_id = int(post_id_str)
+    row = db.execute("SELECT topic, status FROM content_queue WHERE id = ?", (post_id,)).fetchone()
+    if not row:
+        await query.edit_message_caption(caption=f"Post {post_id} not found.")
+        return
+    if row["status"] != "pending_approval":
+        await query.edit_message_caption(caption=f"Post {post_id} is already '{row['status']}'.")
+        return
+    db.execute(
+        "UPDATE content_queue SET status = 'approved', approved_by = 'telegram', "
+        "approved_at = CURRENT_TIMESTAMP WHERE id = ?",
+        (post_id,),
+    )
+    db.commit()
+    await query.edit_message_caption(
+        caption=f"APPROVED: {row['topic']}\n\nWill be published on next publish run."
+    )
+    log.info(f"Post {post_id} approved via Telegram.")
 
 
 # ── Notification Senders (called by daemon) ──────────────────────────
 
 
-async def notify_pending_approval(bot: Bot, post_id: int, topic: str, caption: str, image_url: str):
-    """Send an image with approve/reject buttons to Telegram."""
-    keyboard = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("Approve", callback_data=f"approve_{post_id}"),
-            InlineKeyboardButton("Reject", callback_data=f"reject_{post_id}"),
-        ]
-    ])
-
+async def notify_pending_approval(
+    bot: Bot, post_id: int, topic: str, caption: str,
+    image_url: str, image_url_alt: str | None = None,
+    image_candidates: str | None = None,
+):
+    """Send candidate images with pick/reject buttons to Telegram."""
     preview_text = (
         f"NEW POST FOR REVIEW\n\n"
         f"Topic: {topic}\n"
         f"Caption: {caption[:300]}{'...' if len(caption) > 300 else ''}"
     )
 
-    try:
-        await bot.send_photo(
-            chat_id=_chat_id(),
-            photo=image_url,
-            caption=preview_text[:1024],  # Telegram caption limit
-            reply_markup=keyboard,
-        )
-    except Exception as e:
-        # If image fails to load, send as text with URL
-        await bot.send_message(
-            chat_id=_chat_id(),
-            text=f"{preview_text}\n\nImage: {image_url}",
-            reply_markup=keyboard,
-        )
-        log.warning(f"Failed to send image for post {post_id}: {e}")
+    if image_candidates:
+        candidates = json.loads(image_candidates)
+
+        # Build pick buttons: one per candidate image
+        buttons = []
+        model_labels = {"flux-2-pro": "flux", "nano-banana-2": "banana"}
+        for model_key, urls in candidates.items():
+            short = model_labels.get(model_key, model_key)
+            for i in range(len(urls)):
+                buttons.append(
+                    InlineKeyboardButton(
+                        f"{model_key} #{i+1}",
+                        callback_data=f"pick_{post_id}_{short}_{i}",
+                    )
+                )
+        # Arrange 2 buttons per row + reject row
+        button_rows = [buttons[i:i+2] for i in range(0, len(buttons), 2)]
+        button_rows.append([InlineKeyboardButton("Reject All", callback_data=f"reject_{post_id}")])
+        keyboard = InlineKeyboardMarkup(button_rows)
+
+        try:
+            await bot.send_message(chat_id=_chat_id(), text=preview_text[:4096])
+            # Send each candidate image labeled
+            all_photos = []
+            for model_key, urls in candidates.items():
+                for i, url in enumerate(urls):
+                    all_photos.append((f"{model_key} #{i+1}", url))
+
+            for j, (label, url) in enumerate(all_photos):
+                kwargs = {"chat_id": _chat_id(), "photo": url, "caption": label}
+                # Attach keyboard to last photo
+                if j == len(all_photos) - 1:
+                    kwargs["reply_markup"] = keyboard
+                await bot.send_photo(**kwargs)
+        except Exception as e:
+            text_links = "\n".join(
+                f"{label}: {url}" for label, url in all_photos
+            )
+            await bot.send_message(
+                chat_id=_chat_id(),
+                text=f"{preview_text}\n\n{text_links}",
+                reply_markup=keyboard,
+            )
+            log.warning(f"Failed to send images for post {post_id}: {e}")
+    elif image_url_alt:
+        # Legacy: two images without candidates JSON
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("Pick A (flux-2-pro)", callback_data=f"pick_{post_id}_flux_0"),
+                InlineKeyboardButton("Pick B (nano-banana-2)", callback_data=f"pick_{post_id}_banana_0"),
+            ],
+            [InlineKeyboardButton("Reject Both", callback_data=f"reject_{post_id}")],
+        ])
+        try:
+            await bot.send_message(chat_id=_chat_id(), text=preview_text[:4096])
+            await bot.send_photo(chat_id=_chat_id(), photo=image_url, caption="A — flux-2-pro")
+            await bot.send_photo(
+                chat_id=_chat_id(), photo=image_url_alt,
+                caption="B — nano-banana-2", reply_markup=keyboard,
+            )
+        except Exception as e:
+            await bot.send_message(
+                chat_id=_chat_id(),
+                text=f"{preview_text}\n\nA: {image_url}\nB: {image_url_alt}",
+                reply_markup=keyboard,
+            )
+            log.warning(f"Failed to send images for post {post_id}: {e}")
+    else:
+        # Single image fallback
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("Approve", callback_data=f"approve_{post_id}"),
+                InlineKeyboardButton("Reject", callback_data=f"reject_{post_id}"),
+            ]
+        ])
+
+        try:
+            await bot.send_photo(
+                chat_id=_chat_id(), photo=image_url,
+                caption=preview_text[:1024],
+                reply_markup=keyboard,
+            )
+        except Exception as e:
+            await bot.send_message(
+                chat_id=_chat_id(),
+                text=f"{preview_text}\n\nImage: {image_url}",
+                reply_markup=keyboard,
+            )
+            log.warning(f"Failed to send image for post {post_id}: {e}")
 
 
 async def notify_task_complete(bot: Bot, task_type: str, summary: str):

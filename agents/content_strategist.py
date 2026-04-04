@@ -4,6 +4,7 @@ from config import get_llm
 from tools.instagram import get_instagram_profile, get_recent_media
 from tools.research import research_trending_topics, research_competitor_strategies
 from tools.db_tools import db_get_content_queue, db_add_content_item, db_get_analytics_summary
+from tools.content_guide import get_menu_items
 
 SYSTEM_PROMPT = """You are the Content Strategist for Capa & Co (קאפה אנד קו), a B2B sandwich
 supplying company that serves food trucks and small coffee places in Israel.
@@ -37,9 +38,15 @@ hashtags (separately, mix of Hebrew and English), and visual_direction (in Engli
 used for AI image generation so it must describe the photo in English).
 
 VISUAL DIRECTION GUIDELINES (write in English):
-- Always describe a vegetarian sandwich on white Carrara marble
-- Specify ingredients, bread type, lighting, and composition
-- Example: "Close-up of a thick ciabatta sandwich with hummus, roasted vegetables and feta on white Carrara marble, golden hour lighting"
+- For visual_direction, use the EXACT dish name from the menu below. The image generator
+  will look up the expert-crafted prompt for that dish automatically.
+- For custom shots not on the menu (behind-the-scenes, lifestyle, etc.), write a detailed
+  English description of the desired image.
+- Rotate through different categories and dishes — don't repeat the same dish in close succession.
+- Use vibe images (from the "Vibe Images" category) for variety alongside product shots.
+
+AVAILABLE MENU ITEMS FOR visual_direction:
+{menu_items}
 
 POSTING TIMES: Early morning (06:00-08:00) or lunch (11:00-13:00) for B2B audience.
 TONE: Professional but warm. You're talking to Israeli small business owners.
@@ -47,8 +54,18 @@ GOAL: Every post should subtly position Capa & Co as a reliable sandwich supply 
 """
 
 
+def _format_menu_items() -> str:
+    """Format menu items for embedding in the system prompt."""
+    items = get_menu_items()
+    lines = []
+    for category, dishes in items.items():
+        lines.append(f"  {category}: {', '.join(dishes)}")
+    return "\n".join(lines)
+
+
 def create_content_strategist():
     llm = get_llm(temperature=0.7)
+    prompt = SYSTEM_PROMPT.format(menu_items=_format_menu_items())
 
     tools = [
         get_instagram_profile,
@@ -60,4 +77,4 @@ def create_content_strategist():
         db_get_analytics_summary,
     ]
 
-    return create_react_agent(model=llm, tools=tools, prompt=SYSTEM_PROMPT)
+    return create_react_agent(model=llm, tools=tools, prompt=prompt)

@@ -52,11 +52,15 @@ PROCESS:
    - Does it subtly position Capa & Co as premium/artisan?
 
    VISUAL DIRECTION REVIEW:
-   - Does the image prompt align with brand colors? (earthy, warm, green-cream palette)
-   - Is it minimal and clean? No clutter or busy compositions
-   - Does it use natural lighting and warm tones?
-   - Is the food styling premium/artisan, not fast-food?
-   - Does it fit the "specialty coffee meets artisan food" aesthetic?
+   - visual_direction may be an exact dish name from the menu (e.g. "Butter Croissant",
+     "Tuna Niçoise"). This is VALID — the image generator will look up the expert prompt
+     from the content guide. Do NOT reject these or ask for more detail.
+   - For custom/freestyle visual directions, check:
+     - Does the description align with brand colors? (earthy, warm, green-cream palette)
+     - Is it minimal and clean? No clutter or busy compositions
+     - Does it use natural lighting and warm tones?
+     - Is the food styling premium/artisan, not fast-food?
+     - Does it fit the "specialty coffee meets artisan food" aesthetic?
 
    OVERALL CONSISTENCY:
    - Does this post feel like it belongs with the other posts?

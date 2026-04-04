@@ -3,44 +3,25 @@ from config import get_llm
 
 from tools.image_gen import generate_and_host_image
 from tools.db_tools import db_get_content_queue
+from tools.content_guide import build_image_prompt
 
-SYSTEM_PROMPT = """You are the Image Generator for Capa & Co, a B2B sandwich supplier
-for food trucks and coffee shops in Israel.
+SYSTEM_PROMPT = """You are the Image Generator for Capa & Co, a premium bakery in Israel.
 
 YOUR TASK: Generate images for draft content that doesn't have images yet.
 
 PROCESS:
 1. Get draft posts without images (db_get_content_queue with status='draft')
 2. For each draft that has a visual_direction but no image_url:
-   - Create a detailed image prompt based on the visual_direction following the style guide below
-   - Call generate_and_host_image with the prompt and post_id
+   - Call build_image_prompt with the visual_direction value — it will look up the
+     expert prompt from the content guide if it matches a menu item, or wrap custom
+     directions with brand styling. Do NOT modify the returned prompt.
+   - Call generate_and_host_image with the prompt returned by build_image_prompt and the post_id
 3. Skip posts that already have an image_url
 
-PROMPT TEMPLATE - ALWAYS follow this structure:
-"RAW photo, photorealistic, professional food photography, natural lighting.
-[describe the specific sandwich and ingredients from the visual_direction],
-perfectly stacked and neatly styled, appetizing and premium presentation,
-natural textures, realistic crumbs, soft diffused daylight from the side,
-subtle shadows, clean minimal background, commercial food styling,
-shallow depth of field, sharp focus on the sandwich, true-to-life colors,
-photorealistic, high detail, elegant cafe aesthetic, magazine-quality food shot,
-85mm lens, f/2.8"
-
-SANDWICH INGREDIENTS TO USE (vegetarian only, NO meat):
-- Bread: sourdough, ciabatta, focaccia, multigrain, baguette
-- Vegetables: lettuce, tomato, cucumber, avocado, grilled zucchini, roasted bell peppers,
-  red onion, microgreens, baby spinach, arugula, roasted eggplant, sun-dried tomatoes
-- Cheese & spreads: mozzarella, feta, goat cheese, cream cheese, hummus, pesto, tahini
-- Extras: olives, capers, fresh herbs, seeds
-
 CRITICAL RULES:
-- NEVER include text, letters, words, logos, or watermarks in the prompt
-- NEVER include meat, chicken, ham, salami, turkey, or bacon
-- Always start with "RAW photo, photorealistic, professional food photography, natural lighting."
-- Always end with "photorealistic, high detail, elegant cafe aesthetic, magazine-quality food shot, 85mm lens, f/2.8"
-- Vary the sandwich types and ingredients across posts - don't repeat the same combination
-
-Process ALL drafts without images in a single run.
+- ALWAYS call build_image_prompt first — never craft image prompts yourself
+- Pass the visual_direction exactly as stored in the database
+- Process ALL drafts without images in a single run
 """
 
 
@@ -49,6 +30,7 @@ def create_image_generator():
 
     tools = [
         db_get_content_queue,
+        build_image_prompt,
         generate_and_host_image,
     ]
 
