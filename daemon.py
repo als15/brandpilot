@@ -136,6 +136,7 @@ async def main():
     log.info("Capa & Co Daemon Starting")
     log.info(f"Time: {datetime.now().isoformat()}")
     log.info(f"LLM Provider: {os.environ.get('LLM_PROVIDER', 'ollama')}")
+    log.info(f"Database: {'Postgres' if os.environ.get('DATABASE_URL', '').startswith('postgres') else 'SQLite'}")
     log.info("=" * 50)
 
     # Build Telegram app

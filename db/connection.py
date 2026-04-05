@@ -2,13 +2,15 @@ import os
 import sqlite3
 import threading
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "")
-
 _local = threading.local()
 
 
+def _get_database_url() -> str:
+    return os.environ.get("DATABASE_URL", "")
+
+
 def _is_postgres() -> bool:
-    return DATABASE_URL.startswith("postgres")
+    return _get_database_url().startswith("postgres")
 
 
 def get_db():
@@ -20,7 +22,7 @@ def get_db():
         import psycopg2
         import psycopg2.extras
         # Railway uses postgres:// but psycopg2 needs postgresql://
-        url = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+        url = _get_database_url().replace("postgres://", "postgresql://", 1)
         conn = psycopg2.connect(url)
         conn.autocommit = False
         conn.cursor_factory = psycopg2.extras.RealDictCursor
