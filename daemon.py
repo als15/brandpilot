@@ -34,17 +34,44 @@ logging.basicConfig(
 log = logging.getLogger("capaco")
 
 
+# Tasks that run frequently and should not notify when there's nothing to do
+QUIET_TASKS = {"publish", "publish_stories"}
+
+
+def _has_publishable_content(task_type: str) -> bool:
+    """Check if there are approved posts ready to publish for the given task type."""
+    from datetime import timezone, timedelta
+    now_il = datetime.now(timezone(timedelta(hours=3)))  # Israel Standard Time
+    today = now_il.strftime("%Y-%m-%d")
+    now_time = now_il.strftime("%H:%M")
+
+    db = get_db()
+    content_type = "photo" if task_type == "publish" else "story"
+    row = db.execute(
+        "SELECT COUNT(*) as cnt FROM content_queue "
+        "WHERE status = 'approved' AND content_type = ? AND image_url IS NOT NULL "
+        "AND (scheduled_date < ? OR (scheduled_date = ? AND scheduled_time <= ?))",
+        (content_type, today, today, now_time),
+    ).fetchone()
+    return row["cnt"] > 0
+
+
 async def safe_run(task_type: str, bot):
     """Run a task in a thread executor (LangGraph/Ollama are sync) and notify via Telegram."""
     chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
     loop = asyncio.get_event_loop()
+
+    # Skip publish tasks if nothing to publish
+    if task_type in QUIET_TASKS and not _has_publishable_content(task_type):
+        log.info(f"Skipping {task_type}: nothing to publish.")
+        return
 
     log.info(f"Starting scheduled task: {task_type}")
     try:
         summary = await loop.run_in_executor(None, run_task, task_type)
         log.info(f"Completed {task_type}: {summary[:200]}")
 
-        if chat_id:
+        if chat_id and task_type not in QUIET_TASKS:
             await notify_task_complete(bot, task_type, summary)
 
         # After image generation, send approval notifications for new pending posts
@@ -116,8 +143,8 @@ async def main():
     telegram_app = build_telegram_app()
     bot = telegram_app.bot
 
-    # Set up scheduler
-    scheduler = AsyncIOScheduler()
+    # Set up scheduler (Israel time)
+    scheduler = AsyncIOScheduler(timezone="Asia/Jerusalem")
 
     # ── Sunday Morning Planning Session ──
     # 07:00 — Content strategist creates full week (5 posts + 7 stories)
