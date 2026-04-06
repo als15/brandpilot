@@ -85,7 +85,9 @@ def publish_photo_post(image_url: str, caption: str) -> dict:
     url = f"{GRAPH_API_BASE}/{_ig_account_id()}/media"
     payload = {"image_url": image_url, "caption": caption}
     resp = requests.post(url, data=payload, headers=_get_headers())
-    resp.raise_for_status()
+    if resp.status_code != 200:
+        error_detail = resp.text[:500]
+        raise RuntimeError(f"Instagram container creation failed ({resp.status_code}): {error_detail}")
     container_id = resp.json()["id"]
 
     # Step 2: Publish the container
@@ -93,7 +95,9 @@ def publish_photo_post(image_url: str, caption: str) -> dict:
     publish_resp = requests.post(
         publish_url, data={"creation_id": container_id}, headers=_get_headers()
     )
-    publish_resp.raise_for_status()
+    if publish_resp.status_code != 200:
+        error_detail = publish_resp.text[:500]
+        raise RuntimeError(f"Instagram publish failed ({publish_resp.status_code}): {error_detail}")
     return publish_resp.json()
 
 
@@ -143,7 +147,9 @@ def publish_story(image_url: str) -> dict:
     url = f"{GRAPH_API_BASE}/{_ig_account_id()}/media"
     payload = {"image_url": image_url, "media_type": "STORIES"}
     resp = requests.post(url, data=payload, headers=_get_headers())
-    resp.raise_for_status()
+    if resp.status_code != 200:
+        error_detail = resp.text[:500]
+        raise RuntimeError(f"Instagram story container failed ({resp.status_code}): {error_detail}")
     container_id = resp.json()["id"]
 
     # Step 2: Publish the container
@@ -151,7 +157,9 @@ def publish_story(image_url: str) -> dict:
     publish_resp = requests.post(
         publish_url, data={"creation_id": container_id}, headers=_get_headers()
     )
-    publish_resp.raise_for_status()
+    if publish_resp.status_code != 200:
+        error_detail = publish_resp.text[:500]
+        raise RuntimeError(f"Instagram story publish failed ({publish_resp.status_code}): {error_detail}")
     return publish_resp.json()
 
 
