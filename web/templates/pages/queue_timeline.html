@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Content Queue — Timeline{% endblock %}
+
+{% block content %}
+<div class="flex items-center gap-4 mb-2">
+    <h1 class="page-title" style="margin-bottom:0">Content Queue</h1>
+    <div class="view-toggle">
+        <a href="/queue?view=grid{% if status_filter %}&status={{ status_filter }}{% endif %}{% if type_filter %}&type={{ type_filter }}{% endif %}" class="view-btn" title="Grid view">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        </a>
+        <a href="/queue?view=timeline{% if status_filter %}&status={{ status_filter }}{% endif %}{% if type_filter %}&type={{ type_filter }}{% endif %}" class="view-btn active" title="Timeline view">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </a>
+    </div>
+</div>
+
+<!-- Filter bar -->
+<div class="filter-bar">
+    <a href="/queue?view=timeline" class="filter-pill {% if not status_filter %}active{% endif %}">
+        All <span class="count">({{ counts.values() | sum }})</span>
+    </a>
+    {% for status in ['draft', 'pending_approval', 'approved', 'published', 'rejected'] %}
+    {% if counts.get(status, 0) > 0 or status == status_filter %}
+    <a href="/queue?view=timeline&status={{ status }}{% if type_filter %}&type={{ type_filter }}{% endif %}"
+       class="filter-pill {% if status_filter == status %}active{% endif %}">
+        {{ status.replace('_', ' ').title() }}
+        <span class="count">({{ counts.get(status, 0) }})</span>
+    </a>
+    {% endif %}
+    {% endfor %}
+
+    <span style="margin-left: 16px;"></span>
+
+    <a href="/queue?view=timeline{% if status_filter %}&status={{ status_filter }}{% endif %}"
+       class="filter-pill {% if not type_filter %}active{% endif %}">All Types</a>
+    <a href="/queue?view=timeline&type=photo{% if status_filter %}&status={{ status_filter }}{% endif %}"
+       class="filter-pill {% if type_filter == 'photo' %}active{% endif %}">Photo</a>
+    <a href="/queue?view=timeline&type=story{% if status_filter %}&status={{ status_filter }}{% endif %}"
+       class="filter-pill {% if type_filter == 'story' %}active{% endif %}">Story</a>
+</div>
+
+<!-- Timeline weeks -->
+{% for week in timeline_weeks %}
+<div class="tl-week-label">{{ week.label }}</div>
+<div class="tl-grid">
+    {% for day in week.days %}
+    <div class="tl-col {% if day.is_today %}tl-col--today{% endif %}">
+        <div class="tl-col-head">
+            <span class="tl-col-day">{{ day.day_name }}</span>
+            <span class="tl-col-num {% if day.is_today %}tl-col-num--today{% endif %}">{{ day.day_num }}</span>
+        </div>
+        <div class="tl-col-body">
+            {% for post in day.posts %}
+            <a href="/queue/{{ post.id }}" class="tl-card">
+                <div class="tl-card-thumb">
+                    {% if post.image_url %}
+                    <img src="{{ post.image_url }}" alt="" loading="lazy">
+                    {% endif %}
+                </div>
+                <div class="tl-card-detail">
+                    <div class="tl-card-row">
+                        <span class="tl-card-time">{{ (post.scheduled_time or '')[:5] }}</span>
+                        <span class="tl-card-type tl-card-type--{{ post.content_type or 'photo' }}">{{ post.content_type or '' }}</span>
+                    </div>
+                    <div class="tl-card-topic">{{ (post.topic or '')[:50] }}</div>
+                    <span class="badge badge-{{ post.status }}">{{ post.status.replace('_', ' ') }}</span>
+                </div>
+            </a>
+            {% endfor %}
+            {% if not day.posts %}
+            <div class="tl-col-empty">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endfor %}
+{% endblock %}

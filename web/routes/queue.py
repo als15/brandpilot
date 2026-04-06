@@ -3,6 +3,8 @@
 import asyncio
 import json
 import logging
+from collections import OrderedDict
+from datetime import date, timedelta
 from functools import partial
 
 from fastapi import APIRouter, Request, BackgroundTasks, Form
@@ -14,11 +16,14 @@ from web.db import query, query_one, execute
 router = APIRouter()
 log = logging.getLogger("capaco")
 
+DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
 
 @router.get("/queue", response_class=HTMLResponse)
 async def queue_page(request: Request):
     from web.routes.dashboard import _global_stats
 
+    view = request.query_params.get("view", "grid")
     status_filter = request.query_params.get("status", "")
     type_filter = request.query_params.get("type", "")
 
@@ -36,7 +41,7 @@ async def queue_page(request: Request):
     rows = await query(
         f"SELECT id, scheduled_date, scheduled_time, content_type, content_pillar, "
         f"topic, status, image_url FROM content_queue {where} "
-        f"ORDER BY scheduled_date DESC, scheduled_time DESC LIMIT 100",
+        f"ORDER BY scheduled_date ASC, scheduled_time ASC LIMIT 200",
         tuple(params),
     )
 
@@ -48,13 +53,51 @@ async def queue_page(request: Request):
 
     stats = await _global_stats()
 
-    return templates.TemplateResponse(request, "pages/queue.html", {
+    # For timeline view, group posts by date into weeks
+    timeline_weeks = []
+    if view == "timeline":
+        # Determine the week range: show current week + next 2 weeks
+        today = date.today()
+        week_start = today - timedelta(days=today.weekday())  # Monday
+
+        for w in range(3):
+            wk_start = week_start + timedelta(weeks=w)
+            days = OrderedDict()
+            for d in range(7):
+                day = wk_start + timedelta(days=d)
+                day_str = day.isoformat()
+                days[day_str] = {
+                    "date": day_str,
+                    "day_name": DAY_NAMES[d],
+                    "day_num": day.day,
+                    "is_today": day == today,
+                    "posts": [],
+                }
+            # Fill in posts
+            for post in rows:
+                sd = post.get("scheduled_date", "")
+                if isinstance(sd, date) and not isinstance(sd, str):
+                    sd = sd.isoformat()
+                sd = str(sd)[:10] if sd else ""
+                if sd in days:
+                    days[sd]["posts"].append(post)
+
+            timeline_weeks.append({
+                "label": f"{wk_start.strftime('%b %d')} — {(wk_start + timedelta(days=6)).strftime('%b %d')}",
+                "days": list(days.values()),
+            })
+
+    template = "pages/queue_timeline.html" if view == "timeline" else "pages/queue.html"
+
+    return templates.TemplateResponse(request, template, {
         "active_page": "queue",
         "stats": stats,
-        "posts": rows,
+        "posts": rows if view != "timeline" else [],
         "counts": counts,
         "status_filter": status_filter,
         "type_filter": type_filter,
+        "view": view,
+        "timeline_weeks": timeline_weeks,
     })
 
 

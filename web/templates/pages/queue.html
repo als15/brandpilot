@@ -2,7 +2,17 @@
 {% block title %}Content Queue{% endblock %}
 
 {% block content %}
-<h1 class="page-title">Content Queue</h1>
+<div class="flex items-center gap-4 mb-2">
+    <h1 class="page-title" style="margin-bottom:0">Content Queue</h1>
+    <div class="view-toggle">
+        <a href="/queue?view=grid{% if status_filter %}&status={{ status_filter }}{% endif %}{% if type_filter %}&type={{ type_filter }}{% endif %}" class="view-btn active" title="Grid view">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        </a>
+        <a href="/queue?view=timeline{% if status_filter %}&status={{ status_filter }}{% endif %}{% if type_filter %}&type={{ type_filter }}{% endif %}" class="view-btn" title="Timeline view">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </a>
+    </div>
+</div>
 
 <!-- Filter bar -->
 <div class="filter-bar">
