@@ -41,25 +41,34 @@ def _upscale_image(image_url: str) -> str:
     return result["image"]["url"]
 
 
-def _upload_to_imgbb(image_bytes: bytes) -> str:
-    """Upload image bytes to imgbb and return the public URL."""
-    b64 = base64.b64encode(image_bytes).decode("utf-8")
-    resp = requests.post(
-        "https://api.imgbb.com/1/upload",
-        data={
-            "key": os.environ["IMGBB_API_KEY"],
-            "image": b64,
-        },
+def _configure_cloudinary():
+    """Configure Cloudinary from environment variables (idempotent)."""
+    import cloudinary
+    cloudinary.config(
+        cloud_name=os.environ["CLOUDINARY_CLOUD_NAME"],
+        api_key=os.environ["CLOUDINARY_API_KEY"],
+        api_secret=os.environ["CLOUDINARY_API_SECRET"],
+        secure=True,
     )
-    resp.raise_for_status()
-    return resp.json()["data"]["url"]
+
+
+def _upload_to_cloudinary(image_bytes: bytes) -> str:
+    """Upload image bytes to Cloudinary and return the public URL."""
+    import cloudinary.uploader
+    _configure_cloudinary()
+    result = cloudinary.uploader.upload(
+        image_bytes,
+        folder="capaco",
+        resource_type="image",
+    )
+    return result["secure_url"]
 
 
 def _rehost_image(fal_url: str) -> str:
-    """Download image from fal.ai temp URL and rehost on imgbb for permanent public URL."""
+    """Download image from fal.ai temp URL and rehost on Cloudinary for permanent public URL."""
     resp = requests.get(fal_url)
     resp.raise_for_status()
-    return _upload_to_imgbb(resp.content)
+    return _upload_to_cloudinary(resp.content)
 
 
 def upscale_and_host(image_url: str) -> str:
