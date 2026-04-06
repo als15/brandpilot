@@ -161,10 +161,10 @@ async def main():
     scheduler.add_job(safe_run, "cron", day_of_week="sun", hour=9,
                       args=["image_generation", bot], id="image_generation")
 
-    # ── Daily Publishing at 08:00 ──
-    scheduler.add_job(safe_run, "cron", hour=8,
+    # ── Daily Publishing every 2 hours (06:00–20:00) ──
+    scheduler.add_job(safe_run, "cron", hour="6,8,10,12,14,16,18,20",
                       args=["publish", bot], id="publish")
-    scheduler.add_job(safe_run, "cron", hour=8,
+    scheduler.add_job(safe_run, "cron", hour="6,8,10,12,14,16,18,20",
                       args=["publish_stories", bot], id="publish_stories")
 
     # ── Daily Performance Review ──
