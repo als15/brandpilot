@@ -1,7 +1,11 @@
+import logging
 import os
+import time
 import requests
 from datetime import date
 from langchain_core.tools import tool
+
+log = logging.getLogger("capaco")
 
 from db.connection import get_db
 
@@ -10,6 +14,23 @@ GRAPH_API_BASE = "https://graph.facebook.com/v21.0"
 # Daily publish limits
 MAX_POSTS_PER_DAY = 1
 MAX_STORIES_PER_DAY = 2
+
+
+def _wait_for_container(container_id: str, max_wait: int = 60, interval: int = 5):
+    """Poll container status until FINISHED or timeout."""
+    url = f"{GRAPH_API_BASE}/{container_id}"
+    params = {"fields": "status_code"}
+    for _ in range(max_wait // interval):
+        resp = requests.get(url, params=params, headers=_get_headers(), timeout=30)
+        if resp.status_code == 200:
+            status = resp.json().get("status_code")
+            if status == "FINISHED":
+                return
+            if status == "ERROR":
+                raise RuntimeError(f"Instagram container {container_id} failed processing")
+        log.info(f"Container {container_id} not ready (status={resp.json().get('status_code', '?')}), waiting {interval}s...")
+        time.sleep(interval)
+    raise RuntimeError(f"Container {container_id} not ready after {max_wait}s timeout")
 
 
 def _published_today(content_type: str) -> int:
@@ -116,7 +137,10 @@ def publish_photo_post(image_url: str, caption: str) -> dict:
         raise RuntimeError(f"Instagram container creation failed ({resp.status_code}): {error_detail}")
     container_id = resp.json()["id"]
 
-    # Step 2: Publish the container
+    # Step 2: Wait for container to be ready
+    _wait_for_container(container_id)
+
+    # Step 3: Publish the container
     publish_url = f"{GRAPH_API_BASE}/{_ig_account_id()}/media_publish"
     publish_resp = requests.post(
         publish_url, data={"creation_id": container_id}, headers=_get_headers(), timeout=30
@@ -154,7 +178,10 @@ def publish_carousel_post(image_urls: list[str], caption: str) -> dict:
     resp.raise_for_status()
     container_id = resp.json()["id"]
 
-    # Step 3: Publish
+    # Step 3: Wait for carousel container to be ready
+    _wait_for_container(container_id)
+
+    # Step 4: Publish
     publish_url = f"{GRAPH_API_BASE}/{_ig_account_id()}/media_publish"
     publish_resp = requests.post(
         publish_url, data={"creation_id": container_id}, headers=_get_headers(), timeout=30
@@ -185,7 +212,10 @@ def publish_story(image_url: str) -> dict:
         raise RuntimeError(f"Instagram story container failed ({resp.status_code}): {error_detail}")
     container_id = resp.json()["id"]
 
-    # Step 2: Publish the container
+    # Step 2: Wait for container to be ready
+    _wait_for_container(container_id)
+
+    # Step 3: Publish the container
     publish_url = f"{GRAPH_API_BASE}/{_ig_account_id()}/media_publish"
     publish_resp = requests.post(
         publish_url, data={"creation_id": container_id}, headers=_get_headers(), timeout=30
