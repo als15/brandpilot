@@ -129,6 +129,8 @@ def init_db():
         for table_sql in _tables():
             db.execute(table_sql)
         _add_column_if_missing(db, "content_queue", "image_url_alt")
+        _add_column_if_missing(db, "content_queue", "retry_count", "INTEGER DEFAULT 0")
+        _add_column_if_missing(db, "run_log", "error_category")
         db.commit()
         _init_done = True
         print("Database initialized successfully.")

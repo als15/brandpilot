@@ -11,6 +11,22 @@ _WEB_DIR = Path(__file__).parent
 templates = Jinja2Templates(directory=str(_WEB_DIR / "templates"))
 
 
+def _datefmt(value, fmt="%m-%d %H:%M"):
+    """Jinja filter: format a datetime or string for display."""
+    if value is None:
+        return ""
+    from datetime import datetime, date
+    if isinstance(value, datetime):
+        return value.strftime(fmt)
+    if isinstance(value, date):
+        return value.strftime(fmt)
+    # Already a string — truncate to 16 chars like the old templates did
+    return str(value)[:16]
+
+
+templates.env.filters["datefmt"] = _datefmt
+
+
 def create_app(scheduler=None, bot=None, safe_run_fn=None):
     """Build the FastAPI app. Receives scheduler/bot from daemon for live access."""
     app = FastAPI(title="Capa & Co Dashboard", docs_url=None, redoc_url=None)

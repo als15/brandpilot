@@ -91,7 +91,7 @@
                                     hx-swap="innerHTML">Skip</button>
                         </div>
                         {% elif task.completed_at %}
-                        <span class="text-xs text-muted">{{ (task.completed_at or '')[:16] }}</span>
+                        <span class="text-xs text-muted">{{ task.completed_at | datefmt }}</span>
                         {% endif %}
                     </td>
                 </tr>

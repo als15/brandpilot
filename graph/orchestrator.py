@@ -217,6 +217,24 @@ def build_orchestrator():
     return graph.compile(checkpointer=checkpointer)
 
 
+def _categorize_error(e: Exception) -> str:
+    """Classify an error for run_log diagnostics."""
+    error_str = str(e).lower()
+    error_type = type(e).__name__.lower()
+
+    if "timeout" in error_str or "timed out" in error_str:
+        return "timeout"
+    if any(x in error_type for x in ("operational", "interface", "database", "psycopg")):
+        return "db_error"
+    if any(x in error_str for x in ("401", "403", "token", "unauthorized", "session has expired")):
+        return "auth_error"
+    if any(x in error_str for x in ("instagram", "graph.facebook", "meta", "400 client error")):
+        return "api_error"
+    if any(x in error_type for x in ("openai", "anthropic", "ollama")):
+        return "llm_error"
+    return "unknown"
+
+
 def run_task(task_type: str) -> str:
     """Run a specific task through the orchestrator. Returns the result summary."""
     app = build_orchestrator()
@@ -243,10 +261,11 @@ def run_task(task_type: str) -> str:
         return summary
     except Exception as e:
         duration = time.time() - start
+        category = _categorize_error(e)
         db = get_db()
         db.execute(
-            "INSERT INTO run_log (task_type, status, duration_seconds, error) VALUES (?, ?, ?, ?)",
-            (task_type, "failed", duration, str(e)[:500]),
+            "INSERT INTO run_log (task_type, status, duration_seconds, error, error_category) VALUES (?, ?, ?, ?, ?)",
+            (task_type, "failed", duration, str(e)[:500], category),
         )
         db.commit()
         raise

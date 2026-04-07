@@ -27,14 +27,14 @@
                     <td class="text-sm">{{ next_runs.get(job.task, '—') }}</td>
                     <td class="text-sm">
                         {% if job.last_success %}
-                        <span style="color:var(--brand-green)">{{ job.last_success[:16] }}</span>
+                        <span style="color:var(--brand-green)">{{ job.last_success | datefmt }}</span>
                         {% else %}
                         <span class="text-muted">—</span>
                         {% endif %}
                     </td>
                     <td class="text-sm">
                         {% if job.last_failure %}
-                        <span style="color:var(--status-failed)">{{ job.last_failure[:16] }}</span>
+                        <span style="color:var(--status-failed)">{{ job.last_failure | datefmt }}</span>
                         {% else %}
                         <span class="text-muted">—</span>
                         {% endif %}

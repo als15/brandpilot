@@ -19,7 +19,7 @@ def get_instagram_profile() -> dict:
     """Get the Instagram Business account profile info including follower count, media count, and bio."""
     url = f"{GRAPH_API_BASE}/{_ig_account_id()}"
     params = {"fields": "username,name,biography,followers_count,follows_count,media_count"}
-    resp = requests.get(url, params=params, headers=_get_headers())
+    resp = requests.get(url, params=params, headers=_get_headers(), timeout=30)
     resp.raise_for_status()
     return resp.json()
 
@@ -32,7 +32,7 @@ def get_recent_media(limit: int = 10) -> list[dict]:
         "fields": "id,caption,timestamp,like_count,comments_count,media_type,permalink",
         "limit": limit,
     }
-    resp = requests.get(url, params=params, headers=_get_headers())
+    resp = requests.get(url, params=params, headers=_get_headers(), timeout=30)
     resp.raise_for_status()
     return resp.json().get("data", [])
 
@@ -45,7 +45,7 @@ def get_media_insights(media_id: str) -> dict:
     """
     url = f"{GRAPH_API_BASE}/{media_id}/insights"
     params = {"metric": "impressions,reach,engagement,saved"}
-    resp = requests.get(url, params=params, headers=_get_headers())
+    resp = requests.get(url, params=params, headers=_get_headers(), timeout=30)
     resp.raise_for_status()
     return resp.json().get("data", [])
 
@@ -69,7 +69,7 @@ def get_account_insights(period: str = "day", days: int = 7) -> dict:
         "since": int(since.timestamp()),
         "until": int(until.timestamp()),
     }
-    resp = requests.get(url, params=params, headers=_get_headers())
+    resp = requests.get(url, params=params, headers=_get_headers(), timeout=30)
     resp.raise_for_status()
     return resp.json().get("data", [])
 
@@ -84,7 +84,7 @@ def publish_photo_post(image_url: str, caption: str) -> dict:
     # Step 1: Create media container
     url = f"{GRAPH_API_BASE}/{_ig_account_id()}/media"
     payload = {"image_url": image_url, "caption": caption}
-    resp = requests.post(url, data=payload, headers=_get_headers())
+    resp = requests.post(url, data=payload, headers=_get_headers(), timeout=30)
     if resp.status_code != 200:
         error_detail = resp.text[:500]
         raise RuntimeError(f"Instagram container creation failed ({resp.status_code}): {error_detail}")
@@ -93,7 +93,7 @@ def publish_photo_post(image_url: str, caption: str) -> dict:
     # Step 2: Publish the container
     publish_url = f"{GRAPH_API_BASE}/{_ig_account_id()}/media_publish"
     publish_resp = requests.post(
-        publish_url, data={"creation_id": container_id}, headers=_get_headers()
+        publish_url, data={"creation_id": container_id}, headers=_get_headers(), timeout=30
     )
     if publish_resp.status_code != 200:
         error_detail = publish_resp.text[:500]
@@ -113,7 +113,7 @@ def publish_carousel_post(image_urls: list[str], caption: str) -> dict:
     for img_url in image_urls:
         url = f"{GRAPH_API_BASE}/{_ig_account_id()}/media"
         payload = {"image_url": img_url, "is_carousel_item": True}
-        resp = requests.post(url, data=payload, headers=_get_headers())
+        resp = requests.post(url, data=payload, headers=_get_headers(), timeout=30)
         resp.raise_for_status()
         children_ids.append(resp.json()["id"])
 
@@ -124,14 +124,14 @@ def publish_carousel_post(image_urls: list[str], caption: str) -> dict:
         "children": ",".join(children_ids),
         "caption": caption,
     }
-    resp = requests.post(url, data=payload, headers=_get_headers())
+    resp = requests.post(url, data=payload, headers=_get_headers(), timeout=30)
     resp.raise_for_status()
     container_id = resp.json()["id"]
 
     # Step 3: Publish
     publish_url = f"{GRAPH_API_BASE}/{_ig_account_id()}/media_publish"
     publish_resp = requests.post(
-        publish_url, data={"creation_id": container_id}, headers=_get_headers()
+        publish_url, data={"creation_id": container_id}, headers=_get_headers(), timeout=30
     )
     publish_resp.raise_for_status()
     return publish_resp.json()
@@ -146,7 +146,7 @@ def publish_story(image_url: str) -> dict:
     # Step 1: Create story media container
     url = f"{GRAPH_API_BASE}/{_ig_account_id()}/media"
     payload = {"image_url": image_url, "media_type": "STORIES"}
-    resp = requests.post(url, data=payload, headers=_get_headers())
+    resp = requests.post(url, data=payload, headers=_get_headers(), timeout=30)
     if resp.status_code != 200:
         error_detail = resp.text[:500]
         raise RuntimeError(f"Instagram story container failed ({resp.status_code}): {error_detail}")
@@ -155,7 +155,7 @@ def publish_story(image_url: str) -> dict:
     # Step 2: Publish the container
     publish_url = f"{GRAPH_API_BASE}/{_ig_account_id()}/media_publish"
     publish_resp = requests.post(
-        publish_url, data={"creation_id": container_id}, headers=_get_headers()
+        publish_url, data={"creation_id": container_id}, headers=_get_headers(), timeout=30
     )
     if publish_resp.status_code != 200:
         error_detail = publish_resp.text[:500]
@@ -173,7 +173,7 @@ def exchange_for_long_lived_token() -> str:
         "client_secret": os.environ["META_APP_SECRET"],
         "fb_exchange_token": os.environ["META_ACCESS_TOKEN"],
     }
-    resp = requests.get(url, params=params)
+    resp = requests.get(url, params=params, timeout=30)
     if resp.status_code != 200:
         return f"Token exchange failed ({resp.status_code}): {resp.text}"
     data = resp.json()

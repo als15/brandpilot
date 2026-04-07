@@ -75,6 +75,11 @@ def db_update_post_status(post_id: int, status: str, instagram_media_id: str = "
             "UPDATE content_queue SET status = ?, instagram_media_id = ?, published_at = CURRENT_TIMESTAMP WHERE id = ?",
             (status, instagram_media_id, post_id),
         )
+    elif status == "failed":
+        db.execute(
+            "UPDATE content_queue SET status = ?, retry_count = COALESCE(retry_count, 0) + 1 WHERE id = ?",
+            (status, post_id),
+        )
     else:
         db.execute(
             "UPDATE content_queue SET status = ? WHERE id = ?",

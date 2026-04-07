@@ -86,5 +86,12 @@ async def logout():
 
 
 @router.get("/health")
-async def health():
-    return {"status": "ok"}
+async def health(request: Request):
+    import asyncio
+    from health import run_all_checks
+    loop = asyncio.get_event_loop()
+    scheduler = getattr(request.app.state, "scheduler", None)
+    result = await loop.run_in_executor(None, run_all_checks, scheduler)
+    status_code = 200 if result["healthy"] else 503
+    from fastapi.responses import JSONResponse
+    return JSONResponse(result, status_code=status_code)

@@ -86,7 +86,7 @@ def _compress_image(image_bytes: bytes, max_side: int = 2048, quality: int = 85)
 
 def _rehost_image(fal_url: str) -> str:
     """Download image from fal.ai temp URL and rehost on Cloudinary for permanent public URL."""
-    resp = requests.get(fal_url)
+    resp = requests.get(fal_url, timeout=60)
     resp.raise_for_status()
     return _upload_to_cloudinary(resp.content)
 

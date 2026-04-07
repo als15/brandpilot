@@ -11,7 +11,7 @@
     <tbody>
     {% for run in recent_runs %}
         <tr class="run-row" onclick="this.classList.toggle('expanded')">
-            <td class="text-sm">{{ (run.started_at or '')[:16] }}</td>
+            <td class="text-sm">{{ run.started_at | datefmt }}</td>
             <td class="text-sm">{{ run.task_type }}</td>
             <td><span class="badge badge-{{ run.status }}">{{ run.status }}</span></td>
             <td class="text-sm text-muted">{{ "%.1f" | format(run.duration_seconds or 0) }}s</td>

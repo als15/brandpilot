@@ -479,6 +479,45 @@ async def notify_error(bot: Bot, task_type: str, error_msg: str):
     await bot.send_message(chat_id=_chat_id(), text=text)
 
 
+async def notify_publish_success(bot: Bot, post_id: int, topic: str, image_url: str):
+    """Notify that a post was published to Instagram."""
+    text = f"Published: {topic}\nPost #{post_id}"
+    try:
+        if image_url:
+            await bot.send_photo(chat_id=_chat_id(), photo=image_url, caption=text)
+        else:
+            await bot.send_message(chat_id=_chat_id(), text=text)
+    except Exception:
+        # Fallback to text if image send fails
+        await bot.send_message(chat_id=_chat_id(), text=text)
+
+
+async def notify_publish_failure(bot: Bot, post_id: int, topic: str):
+    """Notify that a post failed to publish."""
+    text = f"PUBLISH FAILED: {topic}\nPost #{post_id}"
+    await bot.send_message(chat_id=_chat_id(), text=text)
+
+
+# ── Health Command ──────────────────────────────────────────────────
+
+
+async def health_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Run health checks and report to user."""
+    if not _authorized(update):
+        return
+    from health import run_all_checks
+    scheduler = context.application.bot_data.get("scheduler")
+    result = run_all_checks(scheduler)
+
+    lines = []
+    for name, (ok, msg) in result["checks"].items():
+        icon = "OK" if ok else "FAIL"
+        lines.append(f"  {icon}  {name}: {msg}")
+
+    status = "All systems operational" if result["healthy"] else "ISSUES DETECTED"
+    await update.message.reply_text(f"{status}\n\n" + "\n".join(lines))
+
+
 # ── Builder ──────────────────────────────────────────────────────────
 
 
@@ -492,6 +531,7 @@ def build_telegram_app() -> Application:
     app.add_handler(CommandHandler("queue", queue_command))
     app.add_handler(CommandHandler("leads", leads_command))
     app.add_handler(CommandHandler("engage", engage_command))
+    app.add_handler(CommandHandler("health", health_command))
     app.add_handler(CallbackQueryHandler(approval_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_message_handler))
 
