@@ -6,23 +6,27 @@ from db.connection import get_db
 # ── Content Queue Tools ──────────────────────────────────────────────
 
 @tool
-def db_get_content_queue(status: str = "", limit: int = 10) -> str:
+def db_get_content_queue(status: str = "", limit: int = 10, due_only: bool = False) -> str:
     """Get posts from the content queue. Filter by status or get all.
     Args:
         status: Filter by status: 'draft', 'approved', 'published', 'failed'. Empty for all.
         limit: Max number of posts to return.
+        due_only: If True, only return posts whose scheduled_date is today or earlier.
     """
     db = get_db()
+    conditions = []
+    params = []
     if status:
-        rows = db.execute(
-            "SELECT * FROM content_queue WHERE status = ? ORDER BY scheduled_date DESC LIMIT ?",
-            (status, limit),
-        ).fetchall()
-    else:
-        rows = db.execute(
-            "SELECT * FROM content_queue ORDER BY scheduled_date DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
+        conditions.append("status = ?")
+        params.append(status)
+    if due_only:
+        conditions.append("scheduled_date <= date('now')")
+    where = "WHERE " + " AND ".join(conditions) if conditions else ""
+    params.append(limit)
+    rows = db.execute(
+        f"SELECT * FROM content_queue {where} ORDER BY scheduled_date DESC LIMIT ?",
+        params,
+    ).fetchall()
     if not rows:
         return f"No posts found{' with status=' + status if status else ''}."
     return json.dumps([dict(r) for r in rows], indent=2, default=str)

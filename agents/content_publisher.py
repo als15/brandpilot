@@ -9,10 +9,8 @@ FEED_PROMPT = """You are the Content Publisher for Capa & Co.
 YOUR TASK: Publish approved FEED POSTS to Instagram when their scheduled time has arrived.
 
 PROCESS:
-1. Get approved posts (db_get_content_queue with status='approved')
-2. For each approved post where content_type='photo' and image_url is set:
-   - Check scheduled_date and scheduled_time — only publish if the scheduled datetime
-     is today or in the past. Do NOT publish posts scheduled for the future.
+1. Get due approved posts: db_get_content_queue(status='approved', due_only=True)
+2. For each returned post where content_type='photo' and image_url is set:
    - Combine the caption and hashtags into a single caption string
    - Publish via publish_photo_post
    - On success: update status to 'published' with the instagram_media_id
@@ -22,7 +20,7 @@ PROCESS:
 IMPORTANT:
 - Only publish posts with status 'approved' AND a valid image_url
 - The image_url must be a publicly accessible URL
-- Respect the scheduled_date and scheduled_time — do not publish early
+- Always use due_only=True so you never see future-scheduled posts
 """
 
 STORY_PROMPT = """You are the Story Publisher for Capa & Co.
@@ -30,10 +28,8 @@ STORY_PROMPT = """You are the Story Publisher for Capa & Co.
 YOUR TASK: Publish approved STORIES to Instagram when their scheduled time has arrived.
 
 PROCESS:
-1. Get approved posts (db_get_content_queue with status='approved')
-2. For each approved post where content_type='story' and image_url is set:
-   - Check scheduled_date and scheduled_time — only publish if the scheduled datetime
-     is today or in the past. Do NOT publish posts scheduled for the future.
+1. Get due approved posts: db_get_content_queue(status='approved', due_only=True)
+2. For each returned post where content_type='story' and image_url is set:
    - Publish via publish_story (stories don't use captions on Instagram)
    - On success: update status to 'published' with the instagram_media_id
    - On failure: update status to 'failed'
@@ -42,7 +38,7 @@ PROCESS:
 IMPORTANT:
 - Only publish posts with status 'approved' AND a valid image_url
 - The image_url must be a publicly accessible URL
-- Respect the scheduled_date and scheduled_time — do not publish early
+- Always use due_only=True so you never see future-scheduled posts
 """
 
 
