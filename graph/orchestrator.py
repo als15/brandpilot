@@ -4,7 +4,6 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
 
 from graph.state import OrchestratorState
-from db.schema import init_db
 from db.connection import get_db
 
 
@@ -185,8 +184,6 @@ def router(state: OrchestratorState) -> str:
 
 
 def build_orchestrator():
-    init_db()
-
     graph = StateGraph(OrchestratorState)
 
     graph.add_node("culinary_supervisor", culinary_supervisor_node)

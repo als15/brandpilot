@@ -1,8 +1,13 @@
+import threading
+
 from db.connection import get_db, _is_postgres
 
 # Use SERIAL for Postgres, INTEGER PRIMARY KEY AUTOINCREMENT for SQLite
 _PK = "SERIAL PRIMARY KEY" if _is_postgres() else "INTEGER PRIMARY KEY AUTOINCREMENT"
 _DATE_DEFAULT = "CURRENT_DATE" if _is_postgres() else "(date('now'))"
+
+_init_done = False
+_init_lock = threading.Lock()
 
 
 def _tables():
@@ -116,12 +121,17 @@ def _add_column_if_missing(db, table, column, col_type="TEXT"):
 
 
 def init_db():
-    db = get_db()
-    for table_sql in _tables():
-        db.execute(table_sql)
-    _add_column_if_missing(db, "content_queue", "image_url_alt")
-    db.commit()
-    print("Database initialized successfully.")
+    global _init_done
+    with _init_lock:
+        if _init_done:
+            return
+        db = get_db()
+        for table_sql in _tables():
+            db.execute(table_sql)
+        _add_column_if_missing(db, "content_queue", "image_url_alt")
+        db.commit()
+        _init_done = True
+        print("Database initialized successfully.")
 
 
 if __name__ == "__main__":
