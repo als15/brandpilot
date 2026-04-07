@@ -505,17 +505,21 @@ async def health_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Run health checks and report to user."""
     if not _authorized(update):
         return
-    from health import run_all_checks
-    scheduler = context.application.bot_data.get("scheduler")
-    result = run_all_checks(scheduler)
+    try:
+        from health import run_all_checks
+        scheduler = context.application.bot_data.get("scheduler")
+        result = run_all_checks(scheduler)
 
-    lines = []
-    for name, (ok, msg) in result["checks"].items():
-        icon = "OK" if ok else "FAIL"
-        lines.append(f"  {icon}  {name}: {msg}")
+        lines = []
+        for name, (ok, msg) in result["checks"].items():
+            icon = "OK" if ok else "FAIL"
+            lines.append(f"  {icon}  {name}: {msg}")
 
-    status = "All systems operational" if result["healthy"] else "ISSUES DETECTED"
-    await update.message.reply_text(f"{status}\n\n" + "\n".join(lines))
+        status = "All systems operational" if result["healthy"] else "ISSUES DETECTED"
+        await update.message.reply_text(f"{status}\n\n" + "\n".join(lines))
+    except Exception as e:
+        log.error(f"Health command failed: {e}")
+        await update.message.reply_text(f"Health check error: {e}")
 
 
 # ── Builder ──────────────────────────────────────────────────────────

@@ -19,7 +19,9 @@ def _is_connection_alive(conn) -> bool:
     """Check if a cached connection is still usable."""
     try:
         if isinstance(conn, _PgConnectionWrapper):
-            conn._conn.cursor().execute("SELECT 1")
+            cur = conn._conn.cursor()
+            cur.execute("SELECT 1")
+            cur.close()
         else:
             conn.execute("SELECT 1")
         return True
@@ -33,11 +35,10 @@ def _create_pg_connection():
     import psycopg2.extras
     url = _get_database_url().replace("postgres://", "postgresql://", 1)
     conn = psycopg2.connect(url, connect_timeout=10)
-    conn.autocommit = False
+    conn.autocommit = True
     conn.cursor_factory = psycopg2.extras.RealDictCursor
     # Prevent queries from hanging indefinitely (120s max)
     conn.cursor().execute("SET statement_timeout = '120000'")
-    conn.commit()
     return _PgConnectionWrapper(conn)
 
 
