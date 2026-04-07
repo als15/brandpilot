@@ -1,9 +1,28 @@
 import os
 import requests
+from datetime import date
 from langchain_core.tools import tool
 
+from db.connection import get_db
 
 GRAPH_API_BASE = "https://graph.facebook.com/v21.0"
+
+# Daily publish limits
+MAX_POSTS_PER_DAY = 1
+MAX_STORIES_PER_DAY = 2
+
+
+def _published_today(content_type: str) -> int:
+    """Count how many posts/stories were published today."""
+    db = get_db()
+    today = date.today().isoformat()
+    row = db.execute(
+        "SELECT COUNT(*) as cnt FROM content_queue "
+        "WHERE status = 'published' AND content_type = ? "
+        "AND date(published_at) = ?",
+        (content_type, today),
+    ).fetchone()
+    return (row["cnt"] if row else 0) or 0
 
 
 def _get_headers():
@@ -81,6 +100,13 @@ def publish_photo_post(image_url: str, caption: str) -> dict:
         image_url: A publicly accessible URL of the image to post.
         caption: The post caption including hashtags.
     """
+    count = _published_today("photo")
+    if count >= MAX_POSTS_PER_DAY:
+        raise RuntimeError(
+            f"Daily post limit reached: {count}/{MAX_POSTS_PER_DAY} photo posts already published today. "
+            "Cannot publish more until tomorrow."
+        )
+
     # Step 1: Create media container
     url = f"{GRAPH_API_BASE}/{_ig_account_id()}/media"
     payload = {"image_url": image_url, "caption": caption}
@@ -143,6 +169,13 @@ def publish_story(image_url: str) -> dict:
     Args:
         image_url: A publicly accessible URL of the image to post as a story.
     """
+    count = _published_today("story")
+    if count >= MAX_STORIES_PER_DAY:
+        raise RuntimeError(
+            f"Daily story limit reached: {count}/{MAX_STORIES_PER_DAY} stories already published today. "
+            "Cannot publish more until tomorrow."
+        )
+
     # Step 1: Create story media container
     url = f"{GRAPH_API_BASE}/{_ig_account_id()}/media"
     payload = {"image_url": image_url, "media_type": "STORIES"}
