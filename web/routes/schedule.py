@@ -54,7 +54,7 @@ async def schedule_page(request: Request):
         "SELECT id, scheduled_date, scheduled_time, content_type, topic, status, image_url "
         "FROM content_queue "
         "WHERE status IN ('draft', 'pending_approval', 'approved') "
-        "AND scheduled_date >= date('now') "
+        "AND scheduled_date >= CAST(date('now') AS TEXT) "
         "ORDER BY scheduled_date, scheduled_time LIMIT 14"
     )
 

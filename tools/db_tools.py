@@ -13,6 +13,7 @@ def db_get_content_queue(status: str = "", limit: int = 10, due_only: bool = Fal
         limit: Max number of posts to return.
         due_only: If True, only return posts whose scheduled_date is today or earlier.
     """
+    from db.connection import _is_postgres
     db = get_db()
     conditions = []
     params = []
@@ -20,7 +21,10 @@ def db_get_content_queue(status: str = "", limit: int = 10, due_only: bool = Fal
         conditions.append("status = ?")
         params.append(status)
     if due_only:
-        conditions.append("scheduled_date <= date('now')")
+        if _is_postgres():
+            conditions.append("scheduled_date::DATE <= CURRENT_DATE")
+        else:
+            conditions.append("scheduled_date <= date('now')")
     where = "WHERE " + " AND ".join(conditions) if conditions else ""
     params.append(limit)
     rows = db.execute(

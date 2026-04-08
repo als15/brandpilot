@@ -87,18 +87,17 @@ class _PgConnectionWrapper:
 
     @staticmethod
     def _translate_sql(sql):
-        """Convert SQLite date() calls to Postgres equivalents.
-        All date results are cast to TEXT so they can be compared with TEXT columns."""
+        """Convert SQLite date() calls to Postgres equivalents."""
         import re
         sql = sql.replace("?", "%s")
-        # date('now', '-7 days') -> (CURRENT_DATE + INTERVAL '-7 days')::TEXT
+        # date('now', '-7 days') -> CURRENT_DATE + INTERVAL '-7 days'
         sql = re.sub(
             r"date\('now',\s*'(-?\d+)\s+days?'\)",
-            r"(CURRENT_DATE + INTERVAL '\1 days')::TEXT",
+            r"(CURRENT_DATE + INTERVAL '\1 days')",
             sql,
         )
-        # date('now') -> CURRENT_DATE::TEXT  (must come after the interval pattern)
-        sql = sql.replace("date('now')", "CURRENT_DATE::TEXT")
+        # date('now') -> CURRENT_DATE  (must come after the interval pattern)
+        sql = sql.replace("date('now')", "CURRENT_DATE")
         return sql
 
     def execute(self, sql, params=None):
