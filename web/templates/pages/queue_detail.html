@@ -127,7 +127,42 @@
         </div>
         {% endif %}
 
-        {% if post.status == 'pending_approval' %}
+        {% if post.status == 'draft' %}
+        <div class="flex gap-4 mt-4 flex-wrap" id="approval-actions">
+            <button class="btn btn-secondary"
+                    hx-post="/queue/{{ post.id }}/suggestions"
+                    hx-target="#regen-area"
+                    hx-swap="innerHTML"
+                    hx-indicator="#regen-spinner">
+                Regenerate
+            </button>
+            <button class="btn btn-secondary"
+                    onclick="document.getElementById('direct-regen-form-draft').style.display='block'; this.style.display='none';">
+                Regen + Direction
+            </button>
+        </div>
+
+        <div id="direct-regen-form-draft" style="display:none" class="mt-4">
+            <form hx-post="/queue/{{ post.id }}/direct-regen"
+                  hx-target="#regen-area"
+                  hx-swap="innerHTML"
+                  hx-indicator="#direct-regen-spinner-draft">
+                <div class="detail-field-label mb-2">Your direction</div>
+                <input type="text" name="direction" required
+                       placeholder="e.g. tiramisu close up, babka with chocolate drizzle..."
+                       style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px; background:var(--card-bg); color:var(--text);">
+                <div class="flex gap-4 mt-3">
+                    <button type="submit" class="btn btn-primary btn-sm">Generate</button>
+                    <button type="button" class="btn btn-secondary btn-sm"
+                            onclick="document.getElementById('direct-regen-form-draft').style.display='none';">
+                        Cancel
+                    </button>
+                </div>
+                <span id="direct-regen-spinner-draft" class="htmx-indicator text-sm text-muted">Generating image & caption...</span>
+            </form>
+        </div>
+
+        {% elif post.status == 'pending_approval' %}
         <div class="flex gap-4 mt-4 flex-wrap" id="approval-actions">
             <button class="btn btn-primary"
                     hx-post="/queue/{{ post.id }}/approve"
