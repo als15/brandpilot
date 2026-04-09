@@ -104,15 +104,31 @@ def get_account_insights(period: str = "day", days: int = 7) -> dict:
     since = until - timedelta(days=days)
 
     url = f"{GRAPH_API_BASE}/{_ig_account_id()}/insights"
-    params = {
-        "metric": "impressions,reach,follower_count",
+    since_ts = int(since.timestamp())
+    until_ts = int(until.timestamp())
+    headers = _get_headers()
+
+    # impressions and reach support day/week/days_28
+    resp = requests.get(url, params={
+        "metric": "impressions,reach",
         "period": period,
-        "since": int(since.timestamp()),
-        "until": int(until.timestamp()),
-    }
-    resp = requests.get(url, params=params, headers=_get_headers(), timeout=30)
+        "since": since_ts,
+        "until": until_ts,
+    }, headers=headers, timeout=30)
     resp.raise_for_status()
-    return resp.json().get("data", [])
+    data = resp.json().get("data", [])
+
+    # follower_count only supports period=day
+    resp2 = requests.get(url, params={
+        "metric": "follower_count",
+        "period": "day",
+        "since": since_ts,
+        "until": until_ts,
+    }, headers=headers, timeout=30)
+    resp2.raise_for_status()
+    data.extend(resp2.json().get("data", []))
+
+    return data
 
 
 @tool
