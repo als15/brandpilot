@@ -44,6 +44,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/queue - Content queue overview\n"
         "/leads - Recent leads\n"
         "/engage - Pending engagement tasks\n"
+        "/health - System health check\n"
         f"\nYour Telegram ID: {update.effective_user.id}"
     )
 
