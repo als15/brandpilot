@@ -34,6 +34,7 @@ ANALYSIS FOCUS:
 
 For avg_engagement_rate, calculate: (total likes + comments) / follower_count / number_of_posts.
 If insights API returns errors for some posts, skip those and work with what you have.
+Note: The account insights API returns "views" (not "impressions") and "reach". Use these metric names in your reports.
 """
 
 
