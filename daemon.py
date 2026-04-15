@@ -420,7 +420,11 @@ def _register_brand_jobs(scheduler, bot, bc):
 
 
 async def main():
-    bc = init_brand()
+    # In multi-brand mode, init_brand() needs an explicit slug since
+    # _resolve_slug() raises when multiple brands exist without BRAND env var.
+    # Pick the first brand as the default; load_all_brands() handles the rest.
+    available = _list_brands()
+    bc = init_brand(available[0] if available else None)
     os.makedirs("data", exist_ok=True)
     init_db()
     load_persisted_token()
