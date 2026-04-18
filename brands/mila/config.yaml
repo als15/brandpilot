@@ -33,15 +33,18 @@ voice:
 visual:
   style_description: 'Graphic minimalism, solid pastel backdrops, centered composition, and soft diffused lighting.'
   image_base_prompt: >
-    Aesthetic minimalist photography for Mila ice cream. A single hand holding a
-    perfectly styled cone centered in frame. Solid flat pastel background
-    (blush pink or sky blue). Soft diffused high-key lighting, minimal shadows,
-    clean matte textures. Modern boutique brand vibe, graphic composition,
-    8k resolution, professional food styling.
+    Aesthetic minimalist photography for Mila ice cream. The ONLY food shown must
+    be ice cream, gelato, sorbet, waffle cones, or ice cream toppings — absolutely
+    no other food items. A single hand holding a perfectly styled cone centered in
+    frame. Solid flat pastel background (blush pink or sky blue). Soft diffused
+    high-key lighting, minimal shadows, clean matte textures. Modern boutique brand
+    vibe, graphic composition, 8k resolution, professional food styling.
   image_negative_prompt: >
     No busy backgrounds, no street scenes, no bokeh, no harsh sunlight,
     no dark shadows, no messy melting, no blurred trucks, no cluttered props,
-    no realistic street grit.
+    no realistic street grit. No pastries, no croissants, no bread, no cake,
+    no cookies, no chicken, no salad, no pizza, no sandwiches, no savory food,
+    no baked goods, no donuts, no muffins, no pies, no non-ice-cream food items.
   bg_objects:
     - 'white branded ice cream truck'
     - 'waffle cones'

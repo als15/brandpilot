@@ -6,7 +6,7 @@ import requests
 import fal_client
 from langchain_core.tools import tool
 from db.connection import get_db
-from brands.loader import brand_config
+import brands.loader as _brand_loader
 
 log = logging.getLogger(__name__)
 
@@ -64,7 +64,7 @@ def _upload_to_cloudinary(image_bytes: bytes) -> str:
 
     result = cloudinary.uploader.upload(
         image_bytes,
-        folder=brand_config.slug or "uploads",
+        folder=_brand_loader.brand_config.slug or "uploads",
         resource_type="image",
     )
     return result["secure_url"]

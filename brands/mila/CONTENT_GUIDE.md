@@ -8,7 +8,7 @@ Create premium-but-playful food and lifestyle photography for Mila, a pastel-for
 
 GLOBAL NEGATIVE PROMPT
 
-No readable text overlays, no misspelled logos, no watermarks, no plastic-looking ice cream, no artificial neon colors, no dark moody lighting, no cluttered props, no excessive dripping or melting, no messy hands, no warped cones, no extra fingers, no low-resolution faces, no carnival aesthetic, no overdone retro diner styling, and no generic fast-food presentation.
+No readable text overlays, no misspelled logos, no watermarks, no plastic-looking ice cream, no artificial neon colors, no dark moody lighting, no cluttered props, no excessive dripping or melting, no messy hands, no warped cones, no extra fingers, no low-resolution faces, no carnival aesthetic, no overdone retro diner styling, no generic fast-food presentation. CRITICAL: No non-ice-cream food — no pastries, no croissants, no bread, no cake, no cookies, no chicken, no salad, no pizza, no sandwiches, no savory food, no baked goods, no donuts, no muffins, no pies. The ONLY food items in any image must be ice cream, gelato, sorbet, waffle cones, or ice cream toppings like sprinkles and crushed nuts.
 
 ## Signature Cones
 

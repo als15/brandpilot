@@ -286,46 +286,111 @@ async def edit_hashtags(request: Request, post_id: int, hashtags: str = Form("")
     )
 
 
-def _do_direct_regen(post_id: int, direction: str, content_pillar: str):
+@router.get("/queue/{post_id}/poll-status")
+async def poll_post_status(request: Request, post_id: int):
+    """Lightweight JSON endpoint for polling post generation status."""
+    from fastapi.responses import JSONResponse
+
+    brand_id = get_dashboard_brand(request)
+    post = await query_one(
+        "SELECT status, image_url, caption FROM content_queue WHERE id = ? AND brand_id = ?",
+        (post_id, brand_id),
+    )
+    if not post:
+        return JSONResponse({"status": "not_found"}, status_code=404)
+
+    return JSONResponse({
+        "status": post["status"],
+        "image_url": post.get("image_url") or "",
+        "caption": post.get("caption") or "",
+    })
+
+
+def _do_direct_regen(post_id: int, direction: str, content_pillar: str,
+                     brand_id: str = "", original_direction: str = ""):
     """Synchronous: generate image from user direction + LLM caption, update post."""
     from db.connection import get_db
     from tools.content_guide import build_image_prompt
     from tools.image_gen import generate_one
     from config import get_llm
 
+    # Switch to correct brand context so prompts, visual config, and env vars match
+    if brand_id:
+        from brands.loader import set_brand
+        bc = set_brand(brand_id)
+    else:
+        from brands.loader import brand_config as bc
+
     db = get_db()
 
-    # Generate image
-    prompt = build_image_prompt.invoke(direction)
-    image_url = generate_one(prompt)
-
-    # Generate caption
-    llm = get_llm(temperature=0.7)
-    response = llm.invoke(
-        "You write Instagram captions for Capa & Co (קאפה אנד קו), an Israeli bakery.\n\n"
-        "Rules:\n"
-        "- Write in native Israeli Hebrew. Not translated. Not corporate.\n"
-        "- Short and playful — one line is best, max 2 short sentences.\n"
-        "- The caption MUST be specifically about the dish/image described below.\n"
-        "- Add 3-5 hashtags at the end (mix Hebrew and English).\n"
-        "- Emojis: max one, only if natural.\n\n"
-        "Examples of good captions:\n"
-        '- "אפשר להריח את החמאה דרך הטלפון :) #קאפהאנדקו #croissant #בייקרי"\n'
-        '- "כריך שהוא מעט יווני והמון ישראלי #קאפהאנדקו #halloumi #כריכים"\n\n'
-        f"Content pillar: {content_pillar}\n"
-        f"Visual direction: {direction}\n\n"
-        "Write ONLY the caption. Nothing else."
-    )
-    caption = response.content.strip()
-
-    # Update post
+    # Mark as draft immediately so the UI reflects that regeneration is in progress
     db.execute(
-        "UPDATE content_queue SET image_url = ?, caption = ?, visual_direction = ?, "
-        "topic = ?, status = 'pending_approval' WHERE id = ?",
-        (image_url, caption, direction, direction, post_id),
+        "UPDATE content_queue SET status = 'draft', image_url = NULL WHERE id = ?",
+        (post_id,),
     )
     db.commit()
-    log.info(f"Post {post_id} direct-regen complete: direction='{direction}', image={image_url}")
+
+    try:
+        # If we have an original direction, use LLM to merge the original with user feedback
+        # so that "keep it, just make it more golden" refines the original prompt
+        # instead of replacing it entirely.
+        if original_direction and original_direction.strip() != direction:
+            llm = get_llm(temperature=0.3)
+            merged = llm.invoke(
+                "You refine image-generation prompts.\n\n"
+                f"Original visual direction:\n{original_direction}\n\n"
+                f"User feedback / modification request:\n{direction}\n\n"
+                "Write a single updated visual direction that keeps the original subject "
+                "and composition but incorporates the user's requested changes. "
+                "Output ONLY the updated direction, nothing else."
+            )
+            effective_direction = merged.content.strip()
+        else:
+            effective_direction = direction
+
+        # Generate image
+        prompt = build_image_prompt.invoke(effective_direction)
+        image_url = generate_one(prompt)
+
+        # Generate caption using brand voice
+        brand_name = bc.identity.name or brand_id
+        tone = bc.voice.tone or "Warm, playful, polished"
+        caption_style = bc.voice.caption_style or "Short and playful — one line is best, max 2 short sentences."
+        examples = bc.voice.caption_examples or []
+        examples_str = "\n".join(f'- "{ex}"' for ex in examples[:3])
+        hashtags_default = " ".join(bc.voice.hashtags_default[:5]) if bc.voice.hashtags_default else ""
+
+        llm = get_llm(temperature=0.7)
+        response = llm.invoke(
+            f"You write Instagram captions for {brand_name}.\n"
+            f"Tone: {tone}\n\n"
+            f"Rules:\n"
+            f"- {caption_style}\n"
+            f"- The caption MUST be specifically about the dish/image described below.\n"
+            f"- Add 3-5 hashtags at the end (include brand hashtags like {hashtags_default}).\n"
+            f"- Emojis: max one, only if natural.\n\n"
+            + (f"Examples of good captions:\n{examples_str}\n\n" if examples_str else "")
+            + f"Content pillar: {content_pillar}\n"
+            f"Visual direction: {effective_direction}\n\n"
+            f"Write ONLY the caption. Nothing else."
+        )
+        caption = response.content.strip()
+
+        # Update post
+        db.execute(
+            "UPDATE content_queue SET image_url = ?, caption = ?, visual_direction = ?, "
+            "topic = ?, status = 'pending_approval' WHERE id = ?",
+            (image_url, caption, effective_direction, effective_direction, post_id),
+        )
+        db.commit()
+        log.info(f"Post {post_id} direct-regen complete: direction='{effective_direction}', image={image_url}")
+    except Exception as e:
+        log.error(f"Post {post_id} direct-regen failed: {e}")
+        db.execute(
+            "UPDATE content_queue SET status = 'draft' WHERE id = ?",
+            (post_id,),
+        )
+        db.commit()
 
 
 @router.post("/queue/{post_id}/direct-regen", response_class=HTMLResponse)
@@ -340,14 +405,15 @@ async def direct_regen_post(
 
     brand_id = get_dashboard_brand(request)
     post = await query_one(
-        "SELECT id, content_pillar FROM content_queue WHERE id = ? AND brand_id = ?",
+        "SELECT id, content_pillar, visual_direction FROM content_queue WHERE id = ? AND brand_id = ?",
         (post_id, brand_id),
     )
     if not post:
         return HTMLResponse('<div class="text-sm" style="color:var(--status-failed)">Post not found.</div>')
 
     background_tasks.add_task(
-        _do_direct_regen, post_id, direction.strip(), post.get("content_pillar", "product")
+        _do_direct_regen, post_id, direction.strip(), post.get("content_pillar", "product"),
+        brand_id, post.get("visual_direction", ""),
     )
 
     return HTMLResponse(
@@ -361,13 +427,17 @@ def _generate_suggestions(post: dict) -> list[dict]:
     """Use the LLM to generate 3 alternative post suggestions."""
     from config import get_llm
     from tools.content_guide import get_menu_items
+    from brands.loader import brand_config
 
     menu = get_menu_items()
     menu_str = "\n".join(f"  {cat}: {', '.join(items)}" for cat, items in menu.items())
 
+    brand_name = brand_config.identity.name or brand_config.slug
+    brand_type = brand_config.identity.business_type or "business"
+
     llm = get_llm(temperature=0.8)
     response = llm.invoke(
-        f"""You are the content strategist for Capa & Co (קאפה אנד קו), a B2B sandwich supplier in Israel.
+        f"""You are the content strategist for {brand_name}, a {brand_type} in Israel.
 
 A post was rejected and needs replacement. Here's the rejected post:
 - Topic: {post.get('topic', '')}
@@ -407,6 +477,10 @@ async def get_suggestions(request: Request, post_id: int):
     if not post:
         return HTMLResponse('<div class="text-sm text-muted">Post not found.</div>')
 
+    # Ensure brand context is set before generating suggestions
+    from brands.loader import set_brand
+    set_brand(brand_id)
+
     loop = asyncio.get_event_loop()
     suggestions = await loop.run_in_executor(None, partial(_generate_suggestions, post))
 
@@ -430,13 +504,18 @@ async def get_suggestions(request: Request, post_id: int):
             <div class="text-xs text-muted">{hashtags}</div>
             <form class="mt-4" hx-post="/queue/{post_id}/regenerate"
                   hx-target="#regen-area" hx-swap="innerHTML"
-                  hx-confirm="Regenerate with this option?">
+                  hx-indicator="#use-this-spinner-{i}"
+                  hx-disabled-elt="find button[type='submit']">
                 <input type="hidden" name="topic" value="{topic}">
                 <input type="hidden" name="caption" value="{caption}">
                 <input type="hidden" name="hashtags" value="{hashtags}">
                 <input type="hidden" name="visual_direction" value="{visual}">
                 <input type="hidden" name="content_pillar" value="{pillar}">
-                <button type="submit" class="btn btn-primary btn-xs">Use This</button>
+                <button type="submit" class="btn btn-primary btn-xs">
+                    <span class="btn-spinner"></span>
+                    <span class="btn-label">Use This</span>
+                </button>
+                <span id="use-this-spinner-{i}" class="htmx-indicator text-sm text-muted">Regenerating...</span>
             </form>
         </div>"""
 
@@ -444,11 +523,16 @@ async def get_suggestions(request: Request, post_id: int):
 
 
 def _do_regenerate(post_id: int, topic: str, caption: str, hashtags: str,
-                   visual_direction: str, content_pillar: str):
+                   visual_direction: str, content_pillar: str, brand_id: str = ""):
     """Synchronous: update post fields, generate new image, set to pending_approval."""
     from db.connection import get_db
     from tools.content_guide import build_image_prompt
     from tools.image_gen import generate_one
+
+    # Switch to correct brand context so prompts, visual config, and env vars match
+    if brand_id:
+        from brands.loader import set_brand
+        set_brand(brand_id)
 
     db = get_db()
 
@@ -500,7 +584,8 @@ async def regenerate_post(
         return HTMLResponse('<div class="text-sm" style="color:var(--status-failed)">Post not found.</div>')
 
     background_tasks.add_task(
-        _do_regenerate, post_id, topic, caption, hashtags, visual_direction, content_pillar
+        _do_regenerate, post_id, topic, caption, hashtags, visual_direction, content_pillar,
+        brand_id,
     )
 
     return HTMLResponse(

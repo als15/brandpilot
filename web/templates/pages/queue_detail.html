@@ -5,19 +5,26 @@
 <div class="flex items-center gap-4 mb-6">
     <a href="/queue" class="btn btn-secondary btn-sm">&larr; Back to Queue</a>
     <h1 class="page-title" style="margin-bottom:0">Post #{{ post.id }}</h1>
-    <span class="badge badge-{{ post.status }}">{{ post.status.replace('_', ' ') }}</span>
+    <span class="badge badge-{{ post.status }}" id="post-status-badge">{{ post.status.replace('_', ' ') }}</span>
 </div>
 
 <div class="detail-header">
-    {% if post.image_url %}
-    <img src="{{ post.image_url }}" alt="" class="detail-image" id="detail-img"
-         onclick="this.classList.toggle('lightbox')"
-         style="cursor: zoom-in;">
-    {% else %}
-    <div class="detail-image" style="display:flex;align-items:center;justify-content:center;color:var(--gray-text);">
-        No image generated yet
+    {# ── Image area with skeleton pulse when generating ── #}
+    <div class="detail-image-wrap" id="image-area">
+        {% if post.image_url %}
+        <img src="{{ post.image_url }}" alt="" class="detail-image" id="detail-img"
+             onclick="this.classList.toggle('lightbox')"
+             style="cursor: zoom-in;">
+        {% elif post.status == 'draft' %}
+        <div class="detail-image skeleton-pulse" id="detail-img-placeholder">
+            <div class="skeleton-text">Generating image...</div>
+        </div>
+        {% else %}
+        <div class="detail-image" style="display:flex;align-items:center;justify-content:center;color:var(--gray-text);">
+            No image generated yet
+        </div>
+        {% endif %}
     </div>
-    {% endif %}
 
     <div class="detail-info">
         <div class="detail-field" id="schedule-field">
@@ -34,7 +41,8 @@
             <form id="schedule-edit" style="display:none"
                   hx-post="/queue/{{ post.id }}/edit-schedule"
                   hx-target="#schedule-field"
-                  hx-swap="outerHTML">
+                  hx-swap="outerHTML"
+                  hx-disabled-elt="find button[type='submit']">
                 <div class="flex gap-4">
                     <input type="date" name="scheduled_date" value="{{ post.scheduled_date or '' }}"
                            style="padding:6px 10px; border:1px solid var(--border); border-radius:8px; font-size:14px; background:var(--card-bg); color:var(--text); font-family:inherit;">
@@ -42,7 +50,10 @@
                            style="padding:6px 10px; border:1px solid var(--border); border-radius:8px; font-size:14px; background:var(--card-bg); color:var(--text); font-family:inherit;">
                 </div>
                 <div class="flex gap-4 mt-2">
-                    <button type="submit" class="btn btn-primary btn-xs">Save</button>
+                    <button type="submit" class="btn btn-primary btn-xs">
+                        <span class="btn-spinner"></span>
+                        <span class="btn-label">Save</span>
+                    </button>
                     <button type="button" class="btn btn-secondary btn-xs"
                             onclick="document.getElementById('schedule-display').style.display=''; document.getElementById('schedule-edit').style.display='none';">
                         Cancel
@@ -75,11 +86,15 @@
             <form id="caption-edit" style="display:none"
                   hx-post="/queue/{{ post.id }}/edit-caption"
                   hx-target="#caption-field"
-                  hx-swap="outerHTML">
+                  hx-swap="outerHTML"
+                  hx-disabled-elt="find button[type='submit']">
                 <textarea name="caption" rows="3" dir="rtl"
                           style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px; background:var(--card-bg); color:var(--text); font-family:inherit; resize:vertical;">{{ post.caption or '' }}</textarea>
                 <div class="flex gap-4 mt-2">
-                    <button type="submit" class="btn btn-primary btn-xs">Save</button>
+                    <button type="submit" class="btn btn-primary btn-xs">
+                        <span class="btn-spinner"></span>
+                        <span class="btn-label">Save</span>
+                    </button>
                     <button type="button" class="btn btn-secondary btn-xs"
                             onclick="document.getElementById('caption-display').style.display=''; document.getElementById('caption-edit').style.display='none';">
                         Cancel
@@ -102,11 +117,15 @@
             <form id="hashtags-edit" style="display:none"
                   hx-post="/queue/{{ post.id }}/edit-hashtags"
                   hx-target="#hashtags-field"
-                  hx-swap="outerHTML">
+                  hx-swap="outerHTML"
+                  hx-disabled-elt="find button[type='submit']">
                 <input type="text" name="hashtags" dir="rtl" value="{{ post.hashtags or '' }}"
                        style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px; background:var(--card-bg); color:var(--text);">
                 <div class="flex gap-4 mt-2">
-                    <button type="submit" class="btn btn-primary btn-xs">Save</button>
+                    <button type="submit" class="btn btn-primary btn-xs">
+                        <span class="btn-spinner"></span>
+                        <span class="btn-label">Save</span>
+                    </button>
                     <button type="button" class="btn btn-secondary btn-xs"
                             onclick="document.getElementById('hashtags-display').style.display=''; document.getElementById('hashtags-edit').style.display='none';">
                         Cancel
@@ -127,138 +146,78 @@
         </div>
         {% endif %}
 
-        {% if post.status == 'draft' %}
+        {# ── Action buttons (unified across statuses) ── #}
+        {% if post.status in ('draft', 'pending_approval', 'rejected') %}
         <div class="flex gap-4 mt-4 flex-wrap" id="approval-actions">
-            {% if post.image_url %}
-            <button class="btn btn-primary"
-                    hx-post="/queue/{{ post.id }}/approve"
-                    hx-target="#approval-actions"
-                    hx-swap="innerHTML"
-                    hx-confirm="Approve this post?">
-                Approve
+
+            {# Approve (only when there's an image) #}
+            {% if post.status in ('draft', 'pending_approval') and post.image_url %}
+            <button class="btn btn-primary" id="btn-approve"
+                    onclick="showInlineConfirm(this, 'Approve this post?', '/queue/{{ post.id }}/approve', '#approval-actions')">
+                <span class="btn-spinner"></span>
+                <span class="btn-label">Approve</span>
             </button>
             {% endif %}
+
+            {# Regenerate suggestions #}
             <button class="btn btn-secondary"
                     hx-post="/queue/{{ post.id }}/suggestions"
                     hx-target="#regen-area"
                     hx-swap="innerHTML"
-                    hx-indicator="#regen-spinner">
-                Regenerate
+                    hx-indicator="#regen-spinner"
+                    hx-disabled-elt="this">
+                <span class="btn-spinner"></span>
+                <span class="btn-label">Regenerate</span>
             </button>
-            <button class="btn btn-secondary"
-                    onclick="document.getElementById('direct-regen-form-draft').style.display='block'; this.style.display='none';">
-                Regen + Direction
-            </button>
-        </div>
 
-        <div id="direct-regen-form-draft" style="display:none" class="mt-4">
-            <form hx-post="/queue/{{ post.id }}/direct-regen"
-                  hx-target="#regen-area"
-                  hx-swap="innerHTML"
-                  hx-indicator="#direct-regen-spinner-draft">
-                <div class="detail-field-label mb-2">Your direction</div>
-                <input type="text" name="direction" required
-                       placeholder="e.g. tiramisu close up, babka with chocolate drizzle..."
-                       style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px; background:var(--card-bg); color:var(--text);">
-                <div class="flex gap-4 mt-3">
-                    <button type="submit" class="btn btn-primary btn-sm">Generate</button>
-                    <button type="button" class="btn btn-secondary btn-sm"
-                            onclick="document.getElementById('direct-regen-form-draft').style.display='none';">
-                        Cancel
-                    </button>
-                </div>
-                <span id="direct-regen-spinner-draft" class="htmx-indicator text-sm text-muted">Generating image & caption...</span>
-            </form>
-        </div>
-
-        {% elif post.status == 'pending_approval' %}
-        <div class="flex gap-4 mt-4 flex-wrap" id="approval-actions">
-            <button class="btn btn-primary"
-                    hx-post="/queue/{{ post.id }}/approve"
-                    hx-target="#approval-actions"
-                    hx-swap="innerHTML"
-                    hx-confirm="Approve? Image will be upscaled.">
-                Approve
-            </button>
-            <button class="btn btn-secondary"
-                    hx-post="/queue/{{ post.id }}/suggestions"
-                    hx-target="#regen-area"
-                    hx-swap="innerHTML"
-                    hx-indicator="#regen-spinner">
-                Regenerate
-            </button>
-            <button class="btn btn-secondary"
+            {# Regen + Direction toggle #}
+            <button class="btn btn-secondary" id="btn-regen-direction"
                     onclick="document.getElementById('direct-regen-form').style.display='block'; this.style.display='none';">
                 Regen + Direction
             </button>
-            <button class="btn btn-danger"
-                    hx-post="/queue/{{ post.id }}/reject"
-                    hx-target="#approval-actions"
-                    hx-swap="innerHTML"
-                    hx-confirm="Reject this post?">
-                Reject
+
+            {# Reject (only pending_approval) #}
+            {% if post.status == 'pending_approval' %}
+            <button class="btn btn-danger" id="btn-reject"
+                    onclick="showInlineConfirm(this, 'Reject this post?', '/queue/{{ post.id }}/reject', '#approval-actions')">
+                <span class="btn-spinner"></span>
+                <span class="btn-label">Reject</span>
             </button>
+            {% endif %}
+
+            {# Requeue (only rejected) #}
+            {% if post.status == 'rejected' %}
+            <button class="btn btn-secondary" id="btn-requeue"
+                    onclick="showInlineConfirm(this, 'Requeue for review?', '/queue/{{ post.id }}/requeue', '#approval-actions')">
+                <span class="btn-spinner"></span>
+                <span class="btn-label">Requeue</span>
+            </button>
+            {% endif %}
         </div>
 
+        {# ── Single consolidated Regen + Direction form ── #}
         <div id="direct-regen-form" style="display:none" class="mt-4">
             <form hx-post="/queue/{{ post.id }}/direct-regen"
                   hx-target="#regen-area"
                   hx-swap="innerHTML"
-                  hx-indicator="#direct-regen-spinner">
+                  hx-indicator="#direct-regen-spinner"
+                  hx-disabled-elt="find button[type='submit']"
+                  _="on htmx:afterRequest call startPolling()">
                 <div class="detail-field-label mb-2">Your direction</div>
                 <input type="text" name="direction" required
                        placeholder="e.g. tiramisu close up, babka with chocolate drizzle..."
                        style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px; background:var(--card-bg); color:var(--text);">
-                <div class="flex gap-4 mt-3">
-                    <button type="submit" class="btn btn-primary btn-sm">Generate</button>
+                <div class="flex gap-4 mt-3 items-center">
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <span class="btn-spinner"></span>
+                        <span class="btn-label">Generate</span>
+                    </button>
                     <button type="button" class="btn btn-secondary btn-sm"
-                            onclick="document.getElementById('direct-regen-form').style.display='none'; document.querySelector('#approval-actions .btn-secondary:nth-child(3)').style.display='';">
+                            onclick="document.getElementById('direct-regen-form').style.display='none'; document.getElementById('btn-regen-direction').style.display='';">
                         Cancel
                     </button>
+                    <span id="direct-regen-spinner" class="htmx-indicator text-sm text-muted">Generating image & caption...</span>
                 </div>
-                <span id="direct-regen-spinner" class="htmx-indicator text-sm text-muted">Generating image & caption...</span>
-            </form>
-        </div>
-
-        {% elif post.status == 'rejected' %}
-        <div class="flex gap-4 mt-4 flex-wrap" id="approval-actions">
-            <button class="btn btn-secondary"
-                    hx-post="/queue/{{ post.id }}/requeue"
-                    hx-target="#approval-actions"
-                    hx-swap="innerHTML"
-                    hx-confirm="Requeue this post for review?">
-                Requeue
-            </button>
-            <button class="btn btn-secondary"
-                    hx-post="/queue/{{ post.id }}/suggestions"
-                    hx-target="#regen-area"
-                    hx-swap="innerHTML"
-                    hx-indicator="#regen-spinner">
-                Regenerate
-            </button>
-            <button class="btn btn-secondary"
-                    onclick="document.getElementById('direct-regen-form-rejected').style.display='block'; this.style.display='none';">
-                Regen + Direction
-            </button>
-        </div>
-
-        <div id="direct-regen-form-rejected" style="display:none" class="mt-4">
-            <form hx-post="/queue/{{ post.id }}/direct-regen"
-                  hx-target="#regen-area"
-                  hx-swap="innerHTML"
-                  hx-indicator="#direct-regen-spinner-rejected">
-                <div class="detail-field-label mb-2">Your direction</div>
-                <input type="text" name="direction" required
-                       placeholder="e.g. tiramisu close up, babka with chocolate drizzle..."
-                       style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px; background:var(--card-bg); color:var(--text);">
-                <div class="flex gap-4 mt-3">
-                    <button type="submit" class="btn btn-primary btn-sm">Generate</button>
-                    <button type="button" class="btn btn-secondary btn-sm"
-                            onclick="document.getElementById('direct-regen-form-rejected').style.display='none';">
-                        Cancel
-                    </button>
-                </div>
-                <span id="direct-regen-spinner-rejected" class="htmx-indicator text-sm text-muted">Generating image & caption...</span>
             </form>
         </div>
         {% endif %}
@@ -322,4 +281,178 @@
     cursor: zoom-out;
 }
 </style>
+
+{# ── Toast container ── #}
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+/* ── Toast system ────────────────────────────────────────── */
+function showToast(message, type) {
+    type = type || 'success';
+    var container = document.getElementById('toast-container');
+    var toast = document.createElement('div');
+    toast.className = 'toast toast-' + type;
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(function() {
+        toast.classList.add('toast-out');
+        setTimeout(function() { toast.remove(); }, 300);
+    }, 3000);
+}
+
+/* ── Inline confirm (replaces browser confirm()) ─────────── */
+function showInlineConfirm(btn, label, url, target) {
+    var wrapper = btn.parentNode;
+    var originalButtons = [];
+
+    // Hide all sibling buttons
+    Array.from(wrapper.children).forEach(function(child) {
+        if (child.nodeType === 1 && child !== btn) {
+            originalButtons.push({ el: child, display: child.style.display });
+            child.style.display = 'none';
+        }
+    });
+    btn.style.display = 'none';
+
+    // Create inline confirm
+    var confirm = document.createElement('div');
+    confirm.className = 'inline-confirm';
+    confirm.innerHTML =
+        '<span class="confirm-label">' + label + '</span>' +
+        '<button class="btn btn-primary btn-sm" id="confirm-yes">' +
+            '<span class="btn-spinner"></span>' +
+            '<span class="btn-label">Yes</span>' +
+        '</button>' +
+        '<button class="btn btn-secondary btn-sm" id="confirm-no">No</button>';
+
+    wrapper.appendChild(confirm);
+
+    function cleanup() {
+        confirm.remove();
+        btn.style.display = '';
+        originalButtons.forEach(function(item) { item.el.style.display = item.display; });
+    }
+
+    confirm.querySelector('#confirm-no').addEventListener('click', cleanup);
+
+    confirm.querySelector('#confirm-yes').addEventListener('click', function() {
+        var yesBtn = this;
+        yesBtn.disabled = true;
+        yesBtn.querySelector('.btn-spinner').style.display = 'inline-block';
+
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'HX-Request': 'true',
+            },
+            credentials: 'same-origin',
+        })
+        .then(function(r) { return r.text(); })
+        .then(function(html) {
+            var targetEl = document.querySelector(target);
+            if (targetEl) {
+                targetEl.innerHTML = html;
+                htmx.process(targetEl);
+            }
+            // Show success toast
+            if (url.indexOf('/approve') !== -1)  showToast('Post approved');
+            if (url.indexOf('/reject') !== -1)   showToast('Post rejected', 'info');
+            if (url.indexOf('/requeue') !== -1)   showToast('Post requeued', 'info');
+        })
+        .catch(function() {
+            showToast('Action failed — try again', 'error');
+            cleanup();
+        });
+    });
+}
+
+/* ── Polling for background image generation ─────────────── */
+var pollTimer = null;
+var pollCount = 0;
+var POST_ID = {{ post.id }};
+
+function startPolling() {
+    if (pollTimer) return; // already polling
+    pollCount = 0;
+
+    // Show skeleton pulse immediately
+    var imageArea = document.getElementById('image-area');
+    if (imageArea) {
+        imageArea.innerHTML =
+            '<div class="detail-image skeleton-pulse" id="detail-img-placeholder">' +
+                '<div class="skeleton-text">Generating image...</div>' +
+            '</div>';
+    }
+
+    pollTimer = setInterval(checkPostStatus, 4000);
+}
+
+function stopPolling() {
+    if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+    }
+}
+
+function checkPostStatus() {
+    pollCount++;
+    // Stop after ~3 minutes (45 * 4s)
+    if (pollCount > 45) {
+        stopPolling();
+        showToast('Generation is taking longer than expected. Refresh to check.', 'info');
+        return;
+    }
+
+    fetch('/queue/' + POST_ID + '/poll-status', { credentials: 'same-origin' })
+        .then(function(r) { return r.json(); })
+        .catch(function() { return null; })
+        .then(function(data) {
+            if (!data) return;
+
+            if (data.image_url && data.status !== 'draft') {
+                stopPolling();
+                // Update image
+                var imageArea = document.getElementById('image-area');
+                if (imageArea) {
+                    imageArea.innerHTML =
+                        '<img src="' + data.image_url + '" alt="" class="detail-image fade-in" ' +
+                        'id="detail-img" onclick="this.classList.toggle(\'lightbox\')" style="cursor:zoom-in;">';
+                }
+                // Update status badge
+                var badge = document.getElementById('post-status-badge');
+                if (badge) {
+                    badge.className = 'badge badge-' + data.status;
+                    badge.textContent = data.status.replace('_', ' ');
+                }
+                // Update caption if returned
+                if (data.caption) {
+                    var capDisplay = document.getElementById('caption-display');
+                    if (capDisplay) capDisplay.textContent = data.caption;
+                }
+                showToast('Image generated successfully');
+            }
+        });
+}
+
+/* ── Auto-start polling if post is draft with no image ── */
+{% if post.status == 'draft' and not post.image_url %}
+document.addEventListener('DOMContentLoaded', function() { startPolling(); });
+{% endif %}
+
+/* ── Hook HTMX events for toast feedback ─────────────────── */
+document.body.addEventListener('htmx:afterRequest', function(e) {
+    var path = (e.detail.pathInfo && e.detail.pathInfo.requestPath) || '';
+    if (path.indexOf('/direct-regen') !== -1 || path.indexOf('/regenerate') !== -1) {
+        startPolling();
+    }
+    if (path.indexOf('/edit-schedule') !== -1 || path.indexOf('/edit-caption') !== -1 || path.indexOf('/edit-hashtags') !== -1) {
+        if (e.detail.successful) showToast('Saved');
+    }
+});
+
+document.body.addEventListener('htmx:responseError', function() {
+    showToast('Something went wrong', 'error');
+});
+</script>
 {% endblock %}

@@ -64,17 +64,21 @@
                         hx-post="/queue/{{ post.id }}/approve"
                         hx-target="#actions-{{ post.id }}"
                         hx-swap="innerHTML"
+                        hx-disabled-elt="this"
                         hx-confirm="Approve this post?"
-                        onclick="event.preventDefault(); event.stopPropagation();">
-                    Approve
+                        onclick="event.stopPropagation();">
+                    <span class="btn-spinner"></span>
+                    <span class="btn-label">Approve</span>
                 </button>
                 <button class="btn btn-danger btn-xs"
                         hx-post="/queue/{{ post.id }}/reject"
                         hx-target="#actions-{{ post.id }}"
                         hx-swap="innerHTML"
+                        hx-disabled-elt="this"
                         hx-confirm="Reject this post?"
-                        onclick="event.preventDefault(); event.stopPropagation();">
-                    Reject
+                        onclick="event.stopPropagation();">
+                    <span class="btn-spinner"></span>
+                    <span class="btn-label">Reject</span>
                 </button>
             </div>
             {% elif post.status == 'rejected' %}
@@ -83,9 +87,11 @@
                         hx-post="/queue/{{ post.id }}/requeue"
                         hx-target="#actions-{{ post.id }}"
                         hx-swap="innerHTML"
+                        hx-disabled-elt="this"
                         hx-confirm="Requeue this post?"
-                        onclick="event.preventDefault(); event.stopPropagation();">
-                    Requeue
+                        onclick="event.stopPropagation();">
+                    <span class="btn-spinner"></span>
+                    <span class="btn-label">Requeue</span>
                 </button>
             </div>
             {% endif %}

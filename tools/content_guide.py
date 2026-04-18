@@ -6,13 +6,13 @@ import difflib
 from functools import lru_cache
 from langchain_core.tools import tool
 
-from brands.loader import brand_config
+import brands.loader as _brand_loader
 
 
 def _random_bg_objects() -> str:
     """Generate a randomized background-objects clause for image prompts."""
-    bg_objects = brand_config.visual.bg_objects
-    bg_colors = brand_config.visual.bg_colors
+    bg_objects = _brand_loader.brand_config.visual.bg_objects
+    bg_colors = _brand_loader.brand_config.visual.bg_colors
     if not bg_objects or not bg_colors:
         return ""
     count = random.randint(1, 5)
@@ -28,7 +28,7 @@ def _random_bg_objects() -> str:
 
 
 def _brand_suffix() -> str:
-    base = brand_config.visual.image_base_prompt.strip()
+    base = _brand_loader.brand_config.visual.image_base_prompt.strip()
     bg = _random_bg_objects()
     return f"{base}, {bg}" if bg else base
 
@@ -78,7 +78,7 @@ def _parse_guide(guide_path: str) -> dict:
 
 def _get_guide() -> dict:
     """Load and parse the current brand's content guide."""
-    return _parse_guide(str(brand_config.content_guide_path))
+    return _parse_guide(str(_brand_loader.brand_config.content_guide_path))
 
 
 def get_negative_prompt() -> str:
@@ -122,10 +122,11 @@ def build_image_prompt(visual_direction: str) -> str:
     """Build a complete image generation prompt from a visual direction.
 
     If the visual_direction matches a menu item from the content guide, the expert
-    per-dish prompt is used. Otherwise, the raw direction is wrapped with brand styling.
+    per-dish prompt is used. Otherwise, the raw direction is wrapped with brand styling
+    and an ice-cream-only constraint to prevent off-brand food from appearing.
 
     Args:
-        visual_direction: A dish name (e.g. 'Butter Croissant') or free-form image description.
+        visual_direction: A dish name (e.g. 'Pistachio + Vanilla Waffle Cone') or free-form image description.
     """
     negative = get_negative_prompt()
     dish_prompt = get_dish_prompt(visual_direction)
@@ -133,6 +134,13 @@ def build_image_prompt(visual_direction: str) -> str:
     if dish_prompt:
         core = f"{dish_prompt} {_brand_suffix()}"
     else:
-        core = f"{visual_direction}, {_brand_suffix()}"
+        # Enforce ice-cream-only constraint for free-form directions that
+        # didn't match a known menu item.
+        ice_cream_guard = (
+            "This is an ice cream and gelato brand ONLY. "
+            "The only food shown must be ice cream, gelato, sorbet, waffle cones, "
+            "or ice cream toppings. Do not depict any other food items."
+        )
+        core = f"{visual_direction}, {ice_cream_guard} {_brand_suffix()}"
 
     return f"{core}. Avoid: {negative}"
