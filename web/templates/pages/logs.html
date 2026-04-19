@@ -1,44 +1,48 @@
 {% extends "base.html" %}
 {% block title %}Run History{% endblock %}
 
-{% block content %}
-<h1 class="page-title">Run History</h1>
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+{% endblock %}
 
-<!-- Agent health cards -->
+{% block content %}
+<h1 class="font-serif text-[28px] font-bold tracking-tight mb-6">Run History</h1>
+
 {% if agent_stats %}
-<div class="section-label">Agent Health (30 days)</div>
-<div class="card-grid card-grid-4 mb-6">
+<h2 class="text-xs font-medium uppercase tracking-widest opacity-50 mb-3">Agent Health (30 days)</h2>
+<div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
     {% for agent in agent_stats %}
-    <a href="/logs?task={{ agent.task_type }}" class="agent-card" style="text-decoration:none;color:inherit">
-        <div class="agent-card-dot {{ 'err' if agent.failures and agent.failures > 0 else 'ok' }}"></div>
-        <div class="agent-card-name">{{ agent.task_type.replace('_', ' ') }}</div>
-        <div class="agent-card-stats">
-            <span>{{ agent.total }} runs</span>
-            {% if agent.failures and agent.failures > 0 %}
-            <span style="color:var(--status-failed)">{{ agent.failures }} failed</span>
-            {% endif %}
-            <span>avg {{ "%.0f" | format(agent.avg_duration or 0) }}s</span>
+    <a href="/logs?task={{ agent.task_type }}" class="card bg-base-100 shadow-sm hover:shadow-md transition-shadow no-underline text-inherit">
+        <div class="card-body p-4 relative">
+            <div class="badge badge-xs {{ 'badge-error' if agent.failures and agent.failures > 0 else 'badge-success' }} absolute top-4 right-4"></div>
+            <div class="text-xs font-semibold uppercase tracking-wide mb-2">{{ agent.task_type.replace('_', ' ') }}</div>
+            <div class="flex gap-4 text-xs opacity-60">
+                <span>{{ agent.total }} runs</span>
+                {% if agent.failures and agent.failures > 0 %}
+                <span class="text-error">{{ agent.failures }} failed</span>
+                {% endif %}
+                <span>avg {{ "%.0f" | format(agent.avg_duration or 0) }}s</span>
+            </div>
+            <div class="text-xs opacity-40 mt-3">Last: {{ agent.last_run | datefmt }}</div>
         </div>
-        <div class="text-xs text-muted mt-4">Last: {{ agent.last_run | datefmt }}</div>
     </a>
     {% endfor %}
 </div>
 {% endif %}
 
-<!-- Chart -->
 {% if daily %}
-<div class="section-label">Daily Runs (14 days)</div>
-<div class="card mb-6">
-    <div class="chart-container">
-        <canvas id="runsChart"></canvas>
+<h2 class="text-xs font-medium uppercase tracking-widest opacity-50 mb-3">Daily Runs (14 days)</h2>
+<div class="card bg-base-100 shadow-sm mb-6">
+    <div class="card-body p-5">
+        <div class="relative w-full h-[260px]"><canvas id="runsChart"></canvas></div>
     </div>
 </div>
 {% endif %}
 
 <!-- Filters -->
-<div class="filter-bar">
+<div class="flex flex-wrap items-center gap-2 mb-5">
     <select onchange="location.href='/logs?task='+this.value+'{% if status_filter %}&status={{ status_filter }}{% endif %}'"
-            style="padding:5px 12px;border-radius:20px;border:1px solid rgba(26,26,24,0.12);font-family:var(--font-sans);font-size:12px;background:transparent;">
+            class="select select-bordered select-xs">
         <option value="">All Tasks</option>
         {% for t in task_types %}
         <option value="{{ t }}" {% if task_filter == t %}selected{% endif %}>{{ t }}</option>
@@ -46,55 +50,42 @@
     </select>
 
     <a href="/logs{% if task_filter %}?task={{ task_filter }}{% endif %}"
-       class="filter-pill {% if not status_filter %}active{% endif %}">All</a>
+       class="btn btn-xs {{ 'btn-primary' if not status_filter else 'btn-outline' }}">All</a>
     <a href="/logs?status=completed{% if task_filter %}&task={{ task_filter }}{% endif %}"
-       class="filter-pill {% if status_filter == 'completed' %}active{% endif %}">Completed</a>
+       class="btn btn-xs {{ 'btn-primary' if status_filter == 'completed' else 'btn-outline' }}">Completed</a>
     <a href="/logs?status=failed{% if task_filter %}&task={{ task_filter }}{% endif %}"
-       class="filter-pill {% if status_filter == 'failed' %}active{% endif %}">Failed</a>
+       class="btn btn-xs {{ 'btn-primary' if status_filter == 'failed' else 'btn-outline' }}">Failed</a>
 </div>
 
-<!-- Run log table -->
 {% if runs %}
-<div class="card">
-    <div class="table-wrap">
-        <table>
-            <thead>
-                <tr>
-                    <th>Time</th>
-                    <th>Task</th>
-                    <th>Status</th>
-                    <th>Duration</th>
-                    <th>Detail</th>
-                </tr>
-            </thead>
-            <tbody>
-            {% for run in runs %}
-                <tr class="run-row" onclick="this.classList.toggle('expanded')">
-                    <td class="text-sm">{{ run.started_at | datefmt }}</td>
-                    <td class="text-sm">{{ run.task_type }}</td>
-                    <td><span class="badge badge-{{ run.status }}">{{ run.status }}</span></td>
-                    <td class="text-sm text-muted">{{ "%.1f" | format(run.duration_seconds or 0) }}s</td>
-                    <td class="text-sm text-muted truncate" style="max-width:300px">
-                        {{ (run.summary or run.error or '')[:80] }}
-                    </td>
-                </tr>
-                <tr class="run-detail">
-                    <td colspan="5">{{ run.summary or run.error or '(no detail)' }}</td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
+<div class="card bg-base-100 shadow-sm">
+    <div class="card-body p-5">
+        <div class="overflow-x-auto">
+            <table class="table table-sm">
+                <thead>
+                    <tr><th>Time</th><th>Task</th><th>Status</th><th>Duration</th><th>Detail</th></tr>
+                </thead>
+                <tbody>
+                {% for run in runs %}
+                    <tr class="run-row hover" onclick="this.classList.toggle('expanded')">
+                        <td class="text-sm">{{ run.started_at | datefmt }}</td>
+                        <td class="text-sm">{{ run.task_type }}</td>
+                        <td><span class="badge badge-sm badge-{{ run.status }}">{{ run.status }}</span></td>
+                        <td class="text-sm opacity-60">{{ "%.1f" | format(run.duration_seconds or 0) }}s</td>
+                        <td class="text-sm opacity-60 truncate max-w-[300px]">{{ (run.summary or run.error or '')[:80] }}</td>
+                    </tr>
+                    <tr class="run-detail">
+                        <td colspan="5">{{ run.summary or run.error or '(no detail)' }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 {% else %}
-<div class="empty-state">
-    <div class="empty-state-text">No runs recorded yet</div>
-</div>
+<div class="text-center py-12 opacity-50 text-sm">No runs recorded yet</div>
 {% endif %}
-{% endblock %}
-
-{% block head %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 {% endblock %}
 
 {% block scripts %}
@@ -103,33 +94,14 @@
 const ctx = document.getElementById('runsChart');
 if (ctx) {
     new Chart(ctx, {
-        type: 'bar',
-        data: {
+        type: 'bar', data: {
             labels: {{ daily | map(attribute='run_date') | list | tojson }},
             datasets: [
-                {
-                    label: 'Completed',
-                    data: {{ daily | map(attribute='successes') | list | tojson }},
-                    backgroundColor: '#4A5D3A',
-                    borderRadius: 4,
-                },
-                {
-                    label: 'Failed',
-                    data: {{ daily | map(attribute='failures') | list | tojson }},
-                    backgroundColor: '#B85B5B',
-                    borderRadius: 4,
-                }
+                { label: 'Completed', data: {{ daily | map(attribute='successes') | list | tojson }}, backgroundColor: '#4A5D3A', borderRadius: 4 },
+                { label: 'Failed', data: {{ daily | map(attribute='failures') | list | tojson }}, backgroundColor: '#B85B5B', borderRadius: 4 }
             ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { position: 'top' } },
-            scales: {
-                x: { stacked: true, grid: { display: false } },
-                y: { stacked: true, beginAtZero: true, ticks: { stepSize: 1 } }
-            }
-        }
+        }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } },
+            scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, beginAtZero: true, ticks: { stepSize: 1 } } } }
     });
 }
 </script>

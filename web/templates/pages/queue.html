@@ -1,108 +1,590 @@
 {% extends "base.html" %}
 {% block title %}Content Queue{% endblock %}
 
+{% block head %}
+<style>
+    .queue-shell {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+    }
+
+    .queue-hero,
+    .queue-filter-panel,
+    .queue-empty-state {
+        position: relative;
+        background: linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(255,255,255,0.88) 100%);
+        border: 1px solid rgba(26,26,24,0.08);
+        border-radius: 28px;
+        box-shadow: 0 20px 48px rgba(26,26,24,0.08);
+        overflow: hidden;
+    }
+
+    .queue-hero::before,
+    .queue-filter-panel::before,
+    .queue-empty-state::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+            radial-gradient(circle at top right, rgba(143,168,120,0.14), transparent 32%),
+            radial-gradient(circle at bottom left, rgba(212,168,67,0.12), transparent 28%);
+        pointer-events: none;
+    }
+
+    .queue-hero-inner,
+    .queue-filter-panel-inner,
+    .queue-empty-state-inner {
+        position: relative;
+        padding: 26px;
+    }
+
+    .queue-hero-inner {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        align-items: flex-start;
+    }
+
+    .queue-kicker {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+        color: rgba(26,26,24,0.44);
+        margin-bottom: 10px;
+    }
+
+    .queue-title {
+        font-family: var(--font-serif);
+        font-size: clamp(30px, 4vw, 40px);
+        line-height: 1.04;
+        letter-spacing: -0.04em;
+        margin: 0;
+        color: var(--dark);
+    }
+
+    .queue-lead {
+        max-width: 640px;
+        margin: 12px 0 0;
+        font-size: 14px;
+        line-height: 1.75;
+        color: rgba(26,26,24,0.66);
+    }
+
+    .queue-stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 20px;
+    }
+
+    .queue-stat {
+        min-width: 120px;
+        padding: 14px 16px;
+        border-radius: 20px;
+        background: rgba(250,247,242,0.9);
+        border: 1px solid rgba(26,26,24,0.08);
+    }
+
+    .queue-stat-label {
+        display: block;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: rgba(26,26,24,0.46);
+        margin-bottom: 6px;
+    }
+
+    .queue-stat-value {
+        display: block;
+        font-size: 28px;
+        line-height: 1;
+        font-weight: 600;
+        color: var(--brand-green);
+    }
+
+    .queue-stat-note {
+        display: block;
+        margin-top: 6px;
+        font-size: 12px;
+        color: rgba(26,26,24,0.58);
+    }
+
+    .queue-view-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        align-items: flex-end;
+        min-width: 180px;
+    }
+
+    .queue-view-label {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: rgba(26,26,24,0.44);
+    }
+
+    .queue-filter-panel-inner {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+    }
+
+    .queue-filter-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 18px;
+    }
+
+    .queue-filter-row + .queue-filter-row {
+        padding-top: 18px;
+        border-top: 1px solid rgba(26,26,24,0.08);
+    }
+
+    .queue-filter-copy {
+        flex: 0 0 150px;
+    }
+
+    .queue-filter-title {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--dark);
+        margin: 0 0 4px;
+    }
+
+    .queue-filter-text {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.6;
+        color: rgba(26,26,24,0.58);
+    }
+
+    .queue-filter-pills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        flex: 1;
+    }
+
+    .queue-filter-pills .filter-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 34px;
+        border-radius: 999px;
+        background: rgba(250,247,242,0.85);
+        color: rgba(26,26,24,0.68);
+    }
+
+    .queue-filter-pills .filter-pill.active {
+        box-shadow: 0 10px 18px rgba(74,93,58,0.16);
+    }
+
+    .queue-card-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+        gap: 18px;
+    }
+
+    .queue-card {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.92) 100%);
+        border: 1px solid rgba(26,26,24,0.08);
+        border-radius: 26px;
+        overflow: hidden;
+        box-shadow: 0 18px 36px rgba(26,26,24,0.06);
+        transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+    }
+
+    .queue-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 26px 44px rgba(26,26,24,0.12);
+        border-color: rgba(74,93,58,0.16);
+    }
+
+    .queue-card-link {
+        display: block;
+        color: inherit;
+        text-decoration: none;
+    }
+
+    .queue-card-media {
+        position: relative;
+        aspect-ratio: 1 / 1;
+        overflow: hidden;
+        background: linear-gradient(135deg, rgba(250,247,242,0.95), rgba(240,234,223,0.88));
+    }
+
+    .queue-card-media img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    .queue-card-placeholder {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 24px;
+        text-align: center;
+        color: rgba(26,26,24,0.5);
+    }
+
+    .queue-card-placeholder strong {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        color: var(--dark);
+    }
+
+    .queue-card-status {
+        position: absolute;
+        top: 16px;
+        left: 16px;
+        box-shadow: 0 10px 18px rgba(26,26,24,0.12);
+    }
+
+    .queue-card-time {
+        position: absolute;
+        right: 16px;
+        bottom: 16px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        border: 1px solid rgba(26,26,24,0.08);
+        background: rgba(255,255,255,0.9);
+        backdrop-filter: blur(10px);
+        color: rgba(26,26,24,0.68);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+    }
+
+    .queue-card-body {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 18px 18px 20px;
+    }
+
+    .queue-card-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: rgba(26,26,24,0.44);
+    }
+
+    .queue-card-id {
+        font-weight: 700;
+        color: rgba(26,26,24,0.54);
+    }
+
+    .queue-card-type {
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: rgba(74,93,58,0.08);
+        color: var(--brand-green);
+        font-weight: 700;
+    }
+
+    .queue-card-title {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 24px;
+        line-height: 1.14;
+        letter-spacing: -0.03em;
+        color: var(--dark);
+    }
+
+    .queue-card-topic {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .queue-card-detail {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: auto;
+    }
+
+    .queue-card-detail span {
+        display: inline-flex;
+        align-items: center;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(250,247,242,0.92);
+        border: 1px solid rgba(26,26,24,0.08);
+        font-size: 11px;
+        color: rgba(26,26,24,0.66);
+    }
+
+    .queue-card-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 0 18px 18px;
+    }
+
+    .queue-card-actions .badge {
+        align-self: center;
+    }
+
+    .queue-empty-state-inner {
+        text-align: center;
+        padding-top: 54px;
+        padding-bottom: 54px;
+    }
+
+    .queue-empty-icon {
+        width: 70px;
+        height: 70px;
+        margin: 0 auto 16px;
+        border-radius: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(74,93,58,0.08);
+        color: var(--brand-green);
+    }
+
+    .queue-empty-title {
+        font-family: var(--font-serif);
+        font-size: 28px;
+        margin: 0 0 8px;
+        color: var(--dark);
+    }
+
+    .queue-empty-text {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.7;
+        color: rgba(26,26,24,0.6);
+    }
+
+    @media (max-width: 900px) {
+        .queue-hero-inner,
+        .queue-filter-row {
+            flex-direction: column;
+        }
+
+        .queue-view-panel {
+            align-items: flex-start;
+        }
+
+        .queue-filter-copy {
+            flex-basis: auto;
+        }
+    }
+
+    @media (max-width: 640px) {
+        .queue-hero-inner,
+        .queue-filter-panel-inner,
+        .queue-empty-state-inner {
+            padding: 20px;
+        }
+
+        .queue-stat {
+            min-width: calc(50% - 6px);
+        }
+
+        .queue-card-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="flex items-center gap-4 mb-2">
-    <h1 class="page-title" style="margin-bottom:0">Content Queue</h1>
-    <div class="view-toggle">
-        <a href="/queue?view=grid{% if status_filter %}&status={{ status_filter }}{% endif %}{% if type_filter %}&type={{ type_filter }}{% endif %}" class="view-btn active" title="Grid view">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-        </a>
-        <a href="/queue?view=timeline{% if status_filter %}&status={{ status_filter }}{% endif %}{% if type_filter %}&type={{ type_filter }}{% endif %}" class="view-btn" title="Timeline view">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-        </a>
-    </div>
-</div>
+<div class="queue-shell">
+    <section class="queue-hero">
+        <div class="queue-hero-inner">
+            <div>
+                <div class="queue-kicker">Content Queue</div>
+                <h1 class="queue-title">Plan, review, and move posts through the publishing pipeline.</h1>
+                <p class="queue-lead">A calmer editorial board for scanning what is still in draft, what needs approval, and what is already ready to ship.</p>
 
-<!-- Filter bar -->
-<div class="filter-bar">
-    <a href="/queue" class="filter-pill {% if not status_filter %}active{% endif %}">
-        All <span class="count">({{ counts.values() | sum }})</span>
-    </a>
-    {% for status in ['draft', 'pending_approval', 'approved', 'published', 'rejected'] %}
-    {% if counts.get(status, 0) > 0 or status == status_filter %}
-    <a href="/queue?status={{ status }}{% if type_filter %}&type={{ type_filter }}{% endif %}"
-       class="filter-pill {% if status_filter == status %}active{% endif %}">
-        {{ status.replace('_', ' ').title() }}
-        <span class="count">({{ counts.get(status, 0) }})</span>
-    </a>
-    {% endif %}
-    {% endfor %}
-
-    <span style="margin-left: 16px;"></span>
-
-    <a href="/queue?{% if status_filter %}status={{ status_filter }}{% endif %}"
-       class="filter-pill {% if not type_filter %}active{% endif %}">All Types</a>
-    <a href="/queue?type=photo{% if status_filter %}&status={{ status_filter }}{% endif %}"
-       class="filter-pill {% if type_filter == 'photo' %}active{% endif %}">Photo</a>
-    <a href="/queue?type=story{% if status_filter %}&status={{ status_filter }}{% endif %}"
-       class="filter-pill {% if type_filter == 'story' %}active{% endif %}">Story</a>
-</div>
-
-<!-- Post grid -->
-{% if posts %}
-<div class="post-grid">
-    {% for post in posts %}
-    <a href="/queue/{{ post.id }}" class="post-card">
-        {% if post.image_url %}
-        <img src="{{ post.image_url }}" alt="" class="post-card-img" loading="lazy">
-        {% else %}
-        <div class="post-card-img-placeholder">No image yet</div>
-        {% endif %}
-        <div class="post-card-body">
-            <div class="post-card-meta">
-                <span class="post-card-id">#{{ post.id }}</span>
-                <span>{{ post.scheduled_date or '' }} {{ (post.scheduled_time or '')[:5] }}</span>
-                <span class="badge badge-{{ post.status }}">{{ post.status.replace('_', ' ') }}</span>
+                <div class="queue-stats">
+                    <div class="queue-stat">
+                        <span class="queue-stat-label">Total Posts</span>
+                        <span class="queue-stat-value">{{ counts.values() | sum }}</span>
+                        <span class="queue-stat-note">Across every current status</span>
+                    </div>
+                    <div class="queue-stat">
+                        <span class="queue-stat-label">Needs Review</span>
+                        <span class="queue-stat-value">{{ counts.get('pending_approval', 0) }}</span>
+                        <span class="queue-stat-note">Waiting for approval</span>
+                    </div>
+                    <div class="queue-stat">
+                        <span class="queue-stat-label">Approved</span>
+                        <span class="queue-stat-value">{{ counts.get('approved', 0) }}</span>
+                        <span class="queue-stat-note">Ready for publishing</span>
+                    </div>
+                </div>
             </div>
-            <div class="post-card-topic">{{ post.topic or '' }}</div>
-            <div class="post-card-pillar">{{ post.content_type or '' }} &middot; {{ (post.content_pillar or '').replace('_', ' ') }}</div>
+
+            <div class="queue-view-panel">
+                <div class="queue-view-label">View</div>
+                <div class="view-toggle">
+                    <a href="/queue?view=grid{% if status_filter %}&status={{ status_filter }}{% endif %}{% if type_filter %}&type={{ type_filter }}{% endif %}"
+                       class="view-btn active" title="Grid view" aria-label="Grid view">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                    </a>
+                    <a href="/queue?view=timeline{% if status_filter %}&status={{ status_filter }}{% endif %}{% if type_filter %}&type={{ type_filter }}{% endif %}"
+                       class="view-btn" title="Timeline view" aria-label="Timeline view">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="queue-filter-panel">
+        <div class="queue-filter-panel-inner">
+            <div class="queue-filter-row">
+                <div class="queue-filter-copy">
+                    <h2 class="queue-filter-title">Status</h2>
+                    <p class="queue-filter-text">Focus the board by workflow stage.</p>
+                </div>
+                <div class="queue-filter-pills">
+                    <a href="/queue" class="filter-pill {{ 'active' if not status_filter else '' }}">
+                        All <span class="count">({{ counts.values() | sum }})</span>
+                    </a>
+                    {% for status in ['draft', 'pending_approval', 'approved', 'published', 'rejected'] %}
+                    {% if counts.get(status, 0) > 0 or status == status_filter %}
+                    <a href="/queue?status={{ status }}{% if type_filter %}&type={{ type_filter }}{% endif %}"
+                       class="filter-pill {{ 'active' if status_filter == status else '' }}">
+                        {{ status.replace('_', ' ').title() }}
+                        <span class="count">({{ counts.get(status, 0) }})</span>
+                    </a>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="queue-filter-row">
+                <div class="queue-filter-copy">
+                    <h2 class="queue-filter-title">Format</h2>
+                    <p class="queue-filter-text">Narrow the feed by post type.</p>
+                </div>
+                <div class="queue-filter-pills">
+                    <a href="/queue?{% if status_filter %}status={{ status_filter }}{% endif %}"
+                       class="filter-pill {{ 'active' if not type_filter else '' }}">All Types</a>
+                    <a href="/queue?type=photo{% if status_filter %}&status={{ status_filter }}{% endif %}"
+                       class="filter-pill {{ 'active' if type_filter == 'photo' else '' }}">Photo</a>
+                    <a href="/queue?type=story{% if status_filter %}&status={{ status_filter }}{% endif %}"
+                       class="filter-pill {{ 'active' if type_filter == 'story' else '' }}">Story</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    {% if posts %}
+    <section class="queue-card-grid">
+        {% for post in posts %}
+        <article class="queue-card">
+            <a href="/queue/{{ post.id }}" class="queue-card-link">
+                <div class="queue-card-media">
+                    {% if post.image_url %}
+                    <img src="{{ post.image_url }}" alt="" loading="lazy">
+                    {% else %}
+                    <div class="queue-card-placeholder">
+                        <strong>Queued</strong>
+                        <span>No image generated yet</span>
+                    </div>
+                    {% endif %}
+
+                    <span class="badge badge-{{ post.status }} queue-card-status">{{ post.status.replace('_', ' ') }}</span>
+
+                    <div class="queue-card-time">
+                        {% if post.scheduled_date or post.scheduled_time %}
+                        {{ post.scheduled_date or 'Unscheduled' }}{% if post.scheduled_time %} · {{ (post.scheduled_time or '')[:5] }}{% endif %}
+                        {% else %}
+                        Unscheduled
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="queue-card-body">
+                    <div class="queue-card-meta">
+                        <span class="queue-card-id">#{{ post.id }}</span>
+                        <span class="queue-card-type">{{ post.content_type or 'post' }}</span>
+                    </div>
+
+                    <h2 class="queue-card-title queue-card-topic" dir="rtl">{{ post.topic or 'Untitled post' }}</h2>
+
+                    <div class="queue-card-detail">
+                        <span>{{ (post.content_pillar or 'No pillar').replace('_', ' ') }}</span>
+                        <span>{{ post.content_type or 'No type' }}</span>
+                    </div>
+                </div>
+            </a>
 
             {% if post.status == 'pending_approval' %}
-            <div class="mt-4 flex gap-4" id="actions-{{ post.id }}">
+            <div class="queue-card-actions" id="actions-{{ post.id }}">
                 <button class="btn btn-primary btn-xs"
                         hx-post="/queue/{{ post.id }}/approve"
                         hx-target="#actions-{{ post.id }}"
                         hx-swap="innerHTML"
                         hx-disabled-elt="this"
-                        hx-confirm="Approve this post?"
-                        onclick="event.stopPropagation();">
-                    <span class="btn-spinner"></span>
-                    <span class="btn-label">Approve</span>
+                        hx-confirm="Approve this post?">
+                    <span class="loading loading-spinner loading-xs htmx-indicator"></span>
+                    Approve
                 </button>
                 <button class="btn btn-danger btn-xs"
                         hx-post="/queue/{{ post.id }}/reject"
                         hx-target="#actions-{{ post.id }}"
                         hx-swap="innerHTML"
                         hx-disabled-elt="this"
-                        hx-confirm="Reject this post?"
-                        onclick="event.stopPropagation();">
-                    <span class="btn-spinner"></span>
-                    <span class="btn-label">Reject</span>
+                        hx-confirm="Reject this post?">
+                    <span class="loading loading-spinner loading-xs htmx-indicator"></span>
+                    Reject
                 </button>
             </div>
             {% elif post.status == 'rejected' %}
-            <div class="mt-4" id="actions-{{ post.id }}">
+            <div class="queue-card-actions" id="actions-{{ post.id }}">
                 <button class="btn btn-secondary btn-xs"
                         hx-post="/queue/{{ post.id }}/requeue"
                         hx-target="#actions-{{ post.id }}"
                         hx-swap="innerHTML"
                         hx-disabled-elt="this"
-                        hx-confirm="Requeue this post?"
-                        onclick="event.stopPropagation();">
-                    <span class="btn-spinner"></span>
-                    <span class="btn-label">Requeue</span>
+                        hx-confirm="Requeue this post?">
+                    <span class="loading loading-spinner loading-xs htmx-indicator"></span>
+                    Requeue
                 </button>
             </div>
             {% endif %}
+        </article>
+        {% endfor %}
+    </section>
+    {% else %}
+    <section class="queue-empty-state">
+        <div class="queue-empty-state-inner">
+            <div class="queue-empty-icon">
+                <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 12h8"/></svg>
+            </div>
+            <h2 class="queue-empty-title">No posts match these filters.</h2>
+            <p class="queue-empty-text">Try widening the status or format filters to bring more of the queue back into view.</p>
         </div>
-    </a>
-    {% endfor %}
+    </section>
+    {% endif %}
 </div>
-{% else %}
-<div class="empty-state">
-    <div class="empty-state-icon">&#9744;</div>
-    <div class="empty-state-text">No posts matching filters</div>
-</div>
-{% endif %}
 {% endblock %}

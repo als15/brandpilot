@@ -1,104 +1,638 @@
 {% extends "base.html" %}
 {% block title %}Leads & Engagement{% endblock %}
 
+{% block head %}
+<style>
+    .leads-shell {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+    }
+
+    .leads-hero,
+    .leads-panel,
+    .leads-empty-state {
+        position: relative;
+        background: linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(255,255,255,0.88) 100%);
+        border: 1px solid rgba(26,26,24,0.08);
+        border-radius: 28px;
+        box-shadow: 0 20px 48px rgba(26,26,24,0.08);
+        overflow: hidden;
+    }
+
+    .leads-hero::before,
+    .leads-panel::before,
+    .leads-empty-state::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+            radial-gradient(circle at top right, rgba(143,168,120,0.14), transparent 32%),
+            radial-gradient(circle at bottom left, rgba(91,141,184,0.12), transparent 28%);
+        pointer-events: none;
+    }
+
+    .leads-hero-inner,
+    .leads-panel-inner,
+    .leads-empty-state-inner {
+        position: relative;
+        padding: 26px;
+    }
+
+    .leads-hero-inner {
+        display: grid;
+        grid-template-columns: minmax(0, 1.3fr) minmax(300px, 0.85fr);
+        gap: 22px;
+        align-items: start;
+    }
+
+    .leads-kicker {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+        color: rgba(26,26,24,0.44);
+        margin-bottom: 10px;
+    }
+
+    .leads-title {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: clamp(30px, 4vw, 42px);
+        line-height: 1.03;
+        letter-spacing: -0.04em;
+        color: var(--dark);
+    }
+
+    .leads-lead {
+        max-width: 640px;
+        margin: 12px 0 0;
+        font-size: 14px;
+        line-height: 1.78;
+        color: rgba(26,26,24,0.66);
+    }
+
+    .leads-tab-nav {
+        display: inline-flex;
+        gap: 8px;
+        margin-top: 20px;
+        padding: 6px;
+        border-radius: 999px;
+        background: rgba(250,247,242,0.92);
+        border: 1px solid rgba(26,26,24,0.08);
+    }
+
+    .leads-tab-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 120px;
+        padding: 10px 16px;
+        border-radius: 999px;
+        text-decoration: none;
+        color: rgba(26,26,24,0.62);
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    .leads-tab-link.is-active {
+        background: var(--brand-green);
+        color: var(--cream);
+        box-shadow: 0 12px 24px rgba(74,93,58,0.16);
+    }
+
+    .leads-signal-card {
+        padding: 20px;
+        border-radius: 24px;
+        background: linear-gradient(145deg, rgba(26,26,24,0.98), rgba(42,42,38,0.96));
+        color: rgba(250,247,242,0.86);
+        box-shadow: 0 24px 40px rgba(26,26,24,0.16);
+    }
+
+    .leads-signal-card .leads-kicker {
+        color: rgba(250,247,242,0.5);
+    }
+
+    .leads-signal-value {
+        display: block;
+        margin-top: 10px;
+        font-size: clamp(42px, 6vw, 58px);
+        line-height: 0.95;
+        font-weight: 600;
+        color: var(--cream);
+    }
+
+    .leads-signal-copy {
+        margin: 12px 0 18px;
+        font-size: 14px;
+        line-height: 1.7;
+        color: rgba(250,247,242,0.68);
+    }
+
+    .leads-signal-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding-top: 12px;
+        border-top: 1px solid rgba(250,247,242,0.12);
+        font-size: 12px;
+        color: rgba(250,247,242,0.72);
+    }
+
+    .leads-funnel {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+    }
+
+    .leads-funnel-stage {
+        position: relative;
+        padding: 18px;
+        border-radius: 22px;
+        border: 1px solid rgba(26,26,24,0.08);
+        background: linear-gradient(180deg, rgba(250,247,242,0.8) 0%, rgba(255,255,255,0.92) 100%);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.82);
+    }
+
+    .leads-funnel-stage::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        right: -8px;
+        width: 16px;
+        height: 2px;
+        background: rgba(26,26,24,0.12);
+        transform: translateY(-50%);
+    }
+
+    .leads-funnel-stage:last-child::after {
+        display: none;
+    }
+
+    .leads-funnel-count {
+        display: block;
+        font-family: var(--font-serif);
+        font-size: 34px;
+        line-height: 1;
+        letter-spacing: -0.04em;
+        margin-bottom: 8px;
+    }
+
+    .leads-funnel-label {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: rgba(26,26,24,0.52);
+        margin-bottom: 6px;
+    }
+
+    .leads-funnel-note {
+        font-size: 13px;
+        line-height: 1.6;
+        color: rgba(26,26,24,0.6);
+    }
+
+    .leads-filter-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 18px;
+    }
+
+    .leads-filter-copy {
+        flex: 0 0 160px;
+    }
+
+    .leads-filter-title {
+        margin: 0 0 4px;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--dark);
+    }
+
+    .leads-filter-text {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.6;
+        color: rgba(26,26,24,0.58);
+    }
+
+    .leads-filter-pills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        flex: 1;
+    }
+
+    .leads-filter-pills .filter-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 34px;
+        border-radius: 999px;
+        background: rgba(250,247,242,0.85);
+        color: rgba(26,26,24,0.68);
+    }
+
+    .leads-filter-pills .filter-pill.active {
+        box-shadow: 0 10px 18px rgba(74,93,58,0.16);
+    }
+
+    .leads-filter-row + .leads-filter-row {
+        margin-top: 18px;
+        padding-top: 18px;
+        border-top: 1px solid rgba(26,26,24,0.08);
+    }
+
+    .leads-type-select {
+        min-width: 220px;
+        padding: 10px 14px;
+        border-radius: 16px;
+        border: 1px solid rgba(26,26,24,0.12);
+        background: rgba(255,255,255,0.92);
+        color: var(--dark);
+        font-family: var(--font-sans);
+        font-size: 13px;
+    }
+
+    .leads-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+    }
+
+    .lead-card {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        padding: 20px;
+        border-radius: 24px;
+        border: 1px solid rgba(26,26,24,0.08);
+        background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.92) 100%);
+        box-shadow: 0 18px 36px rgba(26,26,24,0.06);
+    }
+
+    .lead-card-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 14px;
+    }
+
+    .lead-card-title {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 28px;
+        line-height: 1.06;
+        letter-spacing: -0.03em;
+        color: var(--dark);
+    }
+
+    .lead-card-handle {
+        margin-top: 6px;
+        font-size: 14px;
+        color: rgba(26,26,24,0.62);
+    }
+
+    .lead-card-handle a {
+        color: var(--brand-green);
+        text-decoration: none;
+    }
+
+    .lead-card-metric {
+        flex-shrink: 0;
+        min-width: 92px;
+        padding: 12px 14px;
+        border-radius: 18px;
+        background: rgba(74,93,58,0.08);
+        text-align: center;
+    }
+
+    .lead-card-metric strong {
+        display: block;
+        font-size: 22px;
+        line-height: 1;
+        color: var(--brand-green);
+        margin-bottom: 6px;
+    }
+
+    .lead-card-metric span {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: rgba(26,26,24,0.46);
+    }
+
+    .lead-card-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .lead-card-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 7px 11px;
+        border-radius: 999px;
+        background: rgba(250,247,242,0.92);
+        border: 1px solid rgba(26,26,24,0.08);
+        font-size: 11px;
+        color: rgba(26,26,24,0.66);
+    }
+
+    .lead-card-notes {
+        padding: 16px;
+        border-radius: 18px;
+        background: rgba(250,247,242,0.78);
+        border: 1px solid rgba(26,26,24,0.08);
+    }
+
+    .lead-card-notes-label {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: rgba(26,26,24,0.46);
+        margin-bottom: 8px;
+    }
+
+    .lead-card-notes p {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.75;
+        color: rgba(26,26,24,0.76);
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    .lead-card-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 14px;
+        padding-top: 12px;
+        border-top: 1px solid rgba(26,26,24,0.08);
+    }
+
+    .lead-card-source {
+        font-size: 12px;
+        color: rgba(26,26,24,0.56);
+        line-height: 1.6;
+    }
+
+    .leads-status-wrap {
+        min-width: 180px;
+    }
+
+    .leads-status-select {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 14px;
+        border: 1px solid rgba(26,26,24,0.12);
+        background: rgba(255,255,255,0.94);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--dark);
+        cursor: pointer;
+    }
+
+    .leads-empty-state-inner {
+        text-align: center;
+        padding-top: 54px;
+        padding-bottom: 54px;
+    }
+
+    .leads-empty-icon {
+        width: 70px;
+        height: 70px;
+        margin: 0 auto 16px;
+        border-radius: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(74,93,58,0.08);
+        color: var(--brand-green);
+    }
+
+    .leads-empty-title {
+        font-family: var(--font-serif);
+        font-size: 28px;
+        margin: 0 0 8px;
+        color: var(--dark);
+    }
+
+    .leads-empty-text {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.7;
+        color: rgba(26,26,24,0.6);
+    }
+
+    @media (max-width: 1100px) {
+        .leads-hero-inner,
+        .leads-grid,
+        .leads-funnel {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 820px) {
+        .leads-filter-row,
+        .lead-card-head,
+        .lead-card-footer {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .leads-type-select,
+        .leads-status-wrap {
+            width: 100%;
+        }
+
+        .leads-funnel-stage::after {
+            display: none;
+        }
+    }
+
+    @media (max-width: 640px) {
+        .leads-hero-inner,
+        .leads-panel-inner,
+        .leads-empty-state-inner {
+            padding: 20px;
+        }
+
+        .leads-tab-nav {
+            width: 100%;
+        }
+
+        .leads-tab-link {
+            flex: 1;
+            min-width: 0;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<h1 class="page-title">Leads & Engagement</h1>
+{% set total_leads = funnel.values() | sum %}
+<div class="leads-shell">
+    <section class="leads-hero">
+        <div class="leads-hero-inner">
+            <div>
+                <div class="leads-kicker">Leads & Engagement</div>
+                <h1 class="leads-title">Track prospects from discovery to conversion in one cleaner view.</h1>
+                <p class="leads-lead">A more editorial CRM surface for scanning promising businesses, updating outreach status, and seeing where your lead funnel is strongest.</p>
 
-<!-- Tabs -->
-<div class="tabs mb-6">
-    <a href="/leads" class="tab active">Leads</a>
-    <a href="/engagement" class="tab">Engagement Tasks</a>
-</div>
+                <div class="leads-tab-nav" role="tablist" aria-label="Leads and engagement views">
+                    <a href="/leads" class="leads-tab-link is-active" role="tab" aria-selected="true">Leads</a>
+                    <a href="/engagement" class="leads-tab-link" role="tab" aria-selected="false">Engagement Tasks</a>
+                </div>
+            </div>
 
-<!-- Lead Funnel -->
-{% if funnel %}
-<div class="section-label">Lead Funnel</div>
-<div class="funnel mb-6">
-    {% for status, color in [('discovered', 'var(--status-discovered)'), ('researched', 'var(--status-researched)'), ('contacted', 'var(--status-contacted)'), ('converted', 'var(--status-converted)')] %}
-    {% if not loop.first %}<span class="funnel-arrow">&rarr;</span>{% endif %}
-    <div class="funnel-stage" style="background: {{ color }}15; border: 1px solid {{ color }}30;">
-        <div class="funnel-stage-count" style="color: {{ color }}">{{ funnel.get(status, 0) }}</div>
-        <div class="funnel-stage-label">{{ status }}</div>
-    </div>
-    {% endfor %}
-</div>
-{% endif %}
+            <div class="leads-signal-card">
+                <div class="leads-kicker">Pipeline Size</div>
+                <span class="leads-signal-value">{{ total_leads or 0 }}</span>
+                <p class="leads-signal-copy">Total leads currently tracked across all discovery and conversion stages.</p>
+                <div class="leads-signal-row">
+                    <span>Contacted {{ funnel.get('contacted', 0) }}</span>
+                    <span>Converted {{ funnel.get('converted', 0) }}</span>
+                </div>
+            </div>
+        </div>
+    </section>
 
-<!-- Filters -->
-<div class="filter-bar">
-    <a href="/leads" class="filter-pill {% if not status_filter %}active{% endif %}">All</a>
-    {% for status in ['discovered', 'researched', 'contacted', 'converted'] %}
-    <a href="/leads?status={{ status }}{% if type_filter %}&type={{ type_filter }}{% endif %}"
-       class="filter-pill {% if status_filter == status %}active{% endif %}">{{ status.title() }}</a>
-    {% endfor %}
+    {% if funnel %}
+    <section class="leads-panel">
+        <div class="leads-panel-inner">
+            <div class="leads-kicker">Lead Funnel</div>
+            <div class="leads-funnel">
+                <div class="leads-funnel-stage">
+                    <span class="leads-funnel-count" style="color:#5B8DB8;">{{ funnel.get('discovered', 0) }}</span>
+                    <div class="leads-funnel-label">Discovered</div>
+                    <div class="leads-funnel-note">New prospects worth reviewing further.</div>
+                </div>
+                <div class="leads-funnel-stage">
+                    <span class="leads-funnel-count" style="color:#D4A843;">{{ funnel.get('researched', 0) }}</span>
+                    <div class="leads-funnel-label">Researched</div>
+                    <div class="leads-funnel-note">Qualified and enriched with more context.</div>
+                </div>
+                <div class="leads-funnel-stage">
+                    <span class="leads-funnel-count" style="color:#8FA878;">{{ funnel.get('contacted', 0) }}</span>
+                    <div class="leads-funnel-label">Contacted</div>
+                    <div class="leads-funnel-note">Outreach has started and needs follow-up.</div>
+                </div>
+                <div class="leads-funnel-stage">
+                    <span class="leads-funnel-count" style="color:#4A5D3A;">{{ funnel.get('converted', 0) }}</span>
+                    <div class="leads-funnel-label">Converted</div>
+                    <div class="leads-funnel-note">Moved from prospect to active result.</div>
+                </div>
+            </div>
+        </div>
+    </section>
+    {% endif %}
 
-    <span style="margin-left: 16px;"></span>
-    <select onchange="location.href='/leads?type='+this.value+'{% if status_filter %}&status={{ status_filter }}{% endif %}'"
-            style="padding:5px 12px;border-radius:20px;border:1px solid rgba(26,26,24,0.12);font-family:var(--font-sans);font-size:12px;background:transparent;">
-        <option value="">All Types</option>
-        {% for bt in business_types %}
-        <option value="{{ bt }}" {% if type_filter == bt %}selected{% endif %}>{{ bt.replace('_', ' ').title() }}</option>
-        {% endfor %}
-    </select>
-</div>
+    <section class="leads-panel">
+        <div class="leads-panel-inner">
+            <div class="leads-filter-row">
+                <div class="leads-filter-copy">
+                    <h2 class="leads-filter-title">Status</h2>
+                    <p class="leads-filter-text">Focus the list by pipeline stage.</p>
+                </div>
+                <div class="leads-filter-pills">
+                    <a href="/leads" class="filter-pill {{ 'active' if not status_filter else '' }}">All</a>
+                    {% for status in ['discovered', 'researched', 'contacted', 'converted'] %}
+                    <a href="/leads?status={{ status }}{% if type_filter %}&type={{ type_filter }}{% endif %}"
+                       class="filter-pill {{ 'active' if status_filter == status else '' }}">{{ status.title() }}</a>
+                    {% endfor %}
+                </div>
+            </div>
 
-<!-- Leads table -->
-{% if leads %}
-<div class="card">
-    <div class="table-wrap">
-        <table>
-            <thead>
-                <tr>
-                    <th>Business</th>
-                    <th>Handle</th>
-                    <th>Type</th>
-                    <th>Location</th>
-                    <th>Followers</th>
-                    <th>Source</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody>
-            {% for lead in leads %}
-                <tr>
-                    <td class="text-sm" style="font-weight:500">
-                        {{ lead.business_name or '—' }}
+            <div class="leads-filter-row">
+                <div class="leads-filter-copy">
+                    <h2 class="leads-filter-title">Business Type</h2>
+                    <p class="leads-filter-text">Narrow prospects by industry segment.</p>
+                </div>
+                <div class="leads-filter-pills" style="justify-content:flex-start;">
+                    <select onchange="location.href='/leads?type='+encodeURIComponent(this.value)+'{% if status_filter %}&status={{ status_filter }}{% endif %}'"
+                            class="leads-type-select">
+                        <option value="">All Types</option>
+                        {% for bt in business_types %}
+                        <option value="{{ bt }}" {% if type_filter == bt %}selected{% endif %}>{{ bt.replace('_', ' ').title() }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    {% if leads %}
+    <section class="leads-grid">
+        {% for lead in leads %}
+        <article class="lead-card">
+            <div class="lead-card-head">
+                <div>
+                    <h2 class="lead-card-title">{{ lead.business_name or 'Unnamed business' }}</h2>
+                    <div class="lead-card-handle">
                         {% if lead.instagram_handle %}
-                        <a href="https://instagram.com/{{ lead.instagram_handle }}" target="_blank" rel="noopener"
-                           title="@{{ lead.instagram_handle }}"
-                           style="margin-left:6px;color:var(--brand-green);text-decoration:none;font-size:13px;">&#x2197;</a>
+                        <a href="https://instagram.com/{{ lead.instagram_handle }}" target="_blank" rel="noopener">@{{ lead.instagram_handle }}</a>
+                        {% else %}
+                        No Instagram handle
                         {% endif %}
-                    </td>
-                    <td class="text-sm">
-                        {% if lead.instagram_handle %}
-                        <a href="https://instagram.com/{{ lead.instagram_handle }}" target="_blank" rel="noopener"
-                           style="color:var(--brand-green)">@{{ lead.instagram_handle }}</a>
-                        {% else %}—{% endif %}
-                    </td>
-                    <td class="text-sm">{{ (lead.business_type or '').replace('_', ' ') }}</td>
-                    <td class="text-sm text-muted">{{ lead.location or '—' }}</td>
-                    <td class="text-sm">{{ lead.follower_count or '—' }}</td>
-                    <td class="text-sm text-muted">{{ lead.source or '—' }}</td>
-                    <td>
-                        <form hx-post="/leads/{{ lead.id }}/status" hx-target="closest td" hx-swap="innerHTML">
-                            <select name="status" onchange="this.form.requestSubmit()"
-                                    class="badge badge-{{ lead.status }}"
-                                    style="cursor:pointer;border:none;font-family:var(--font-sans);padding:2px 8px;">
-                                {% for s in ['discovered', 'researched', 'contacted', 'converted'] %}
-                                <option value="{{ s }}" {% if lead.status == s %}selected{% endif %}>{{ s }}</option>
-                                {% endfor %}
-                            </select>
-                        </form>
-                    </td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
+                    </div>
+                </div>
+
+                <div class="lead-card-metric">
+                    <strong>{{ lead.follower_count or '—' }}</strong>
+                    <span>Followers</span>
+                </div>
+            </div>
+
+            <div class="lead-card-meta">
+                <span class="lead-card-chip">{{ (lead.business_type or 'Unknown type').replace('_', ' ') }}</span>
+                <span class="lead-card-chip">{{ lead.location or 'Unknown location' }}</span>
+                <span class="lead-card-chip">{{ lead.source or 'Unknown source' }}</span>
+            </div>
+
+            {% if lead.notes %}
+            <div class="lead-card-notes">
+                <div class="lead-card-notes-label">Notes</div>
+                <p>{{ lead.notes }}</p>
+            </div>
+            {% endif %}
+
+            <div class="lead-card-footer">
+                <div class="lead-card-source">
+                    Added {{ lead.created_at | datefmt('%Y-%m-%d') if lead.created_at else 'recently' }}<br>
+                    Stage can be updated inline.
+                </div>
+
+                <div class="leads-status-wrap" id="lead-status-{{ lead.id }}">
+                    <form hx-post="/leads/{{ lead.id }}/status" hx-target="#lead-status-{{ lead.id }}" hx-swap="outerHTML">
+                        <select name="status" onchange="this.form.requestSubmit()" class="leads-status-select badge-{{ lead.status }}">
+                            {% for s in ['discovered', 'researched', 'contacted', 'converted'] %}
+                            <option value="{{ s }}" {% if lead.status == s %}selected{% endif %}>{{ s.replace('_', ' ').title() }}</option>
+                            {% endfor %}
+                        </select>
+                    </form>
+                </div>
+            </div>
+        </article>
+        {% endfor %}
+    </section>
+    {% else %}
+    <section class="leads-empty-state">
+        <div class="leads-empty-state-inner">
+            <div class="leads-empty-icon">
+                <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14"/><path d="M5 12h14"/><circle cx="12" cy="12" r="9"/></svg>
+            </div>
+            <h2 class="leads-empty-title">No leads found.</h2>
+            <p class="leads-empty-text">Try broadening the filters or generate more prospects to populate this view.</p>
+        </div>
+    </section>
+    {% endif %}
 </div>
-{% else %}
-<div class="empty-state">
-    <div class="empty-state-text">No leads found</div>
-</div>
-{% endif %}
 {% endblock %}

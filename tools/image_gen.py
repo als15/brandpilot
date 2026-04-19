@@ -12,21 +12,54 @@ log = logging.getLogger(__name__)
 
 MODEL = {
     "endpoint": "fal-ai/flux-2-pro",
-    "args": {
-        "image_size": {"width": 2048, "height": 2048},
-        "safety_tolerance": 5,
-    },
+    "args": {"safety_tolerance": 5},
+}
+
+EDIT_MODEL = {
+    "endpoint": "fal-ai/flux-2-pro/edit",
+    "args": {"safety_tolerance": 5},
+}
+
+# Stories need 9:16 or Instagram stretches square images to fill the canvas
+# (visibly on Android — e.g. Samsung One UI). Feed photos stay 1:1.
+_IMAGE_SIZES = {
+    "photo": {"width": 2048, "height": 2048},
+    "story": {"width": 1152, "height": 2048},
 }
 
 
-def _generate_image(prompt: str) -> str:
-    """Call fal.ai to generate one image. Returns the temporary image URL."""
+def _image_size_for(content_type: str) -> dict:
+    return _IMAGE_SIZES.get(content_type, _IMAGE_SIZES["photo"])
+
+
+def _generate_image(prompt: str, reference_url: str | None = None, content_type: str = "photo") -> str:
+    """Call fal.ai to generate one image. Returns the temporary image URL.
+    If reference_url is provided, uses the edit endpoint with the reference as guidance."""
     os.environ["FAL_KEY"] = os.environ.get("FAL_KEY", "")
 
-    result = fal_client.subscribe(
-        MODEL["endpoint"],
-        arguments={"prompt": prompt, "num_images": 1, **MODEL["args"]},
-    )
+    image_size = _image_size_for(content_type)
+
+    if reference_url:
+        result = fal_client.subscribe(
+            EDIT_MODEL["endpoint"],
+            arguments={
+                "prompt": prompt,
+                "image_urls": [reference_url],
+                "num_images": 1,
+                "image_size": image_size,
+                **EDIT_MODEL["args"],
+            },
+        )
+    else:
+        result = fal_client.subscribe(
+            MODEL["endpoint"],
+            arguments={
+                "prompt": prompt,
+                "num_images": 1,
+                "image_size": image_size,
+                **MODEL["args"],
+            },
+        )
     return result["images"][0]["url"]
 
 
@@ -98,9 +131,11 @@ def upscale_and_host(image_url: str) -> str:
     return _rehost_image(upscaled_url)
 
 
-def generate_one(prompt: str) -> str:
-    """Generate one image, rehost it (no upscale). Returns permanent URL."""
-    fal_url = _generate_image(prompt)
+def generate_one(prompt: str, reference_url: str | None = None, content_type: str = "photo") -> str:
+    """Generate one image, rehost it (no upscale). Returns permanent URL.
+    If reference_url is provided, the AI uses it as a visual reference.
+    content_type selects the aspect ratio: "photo" → 1:1, "story" → 9:16."""
+    fal_url = _generate_image(prompt, reference_url=reference_url, content_type=content_type)
     return _rehost_image(fal_url)
 
 
@@ -113,9 +148,14 @@ def generate_and_host_image(prompt: str, post_id: int) -> str:
         post_id: The content queue item ID to update with the generated image.
     """
     try:
-        image_url = generate_one(prompt)
-
         db = get_db()
+        row = db.execute(
+            "SELECT content_type FROM content_queue WHERE id = ?", (post_id,)
+        ).fetchone()
+        content_type = (row["content_type"] if row else None) or "photo"
+
+        image_url = generate_one(prompt, content_type=content_type)
+
         db.execute(
             "UPDATE content_queue SET image_url = ?, status = 'pending_approval' WHERE id = ?",
             (image_url, post_id),

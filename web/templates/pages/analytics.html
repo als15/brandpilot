@@ -6,113 +6,124 @@
 {% endblock %}
 
 {% block content %}
-<h1 class="page-title">Analytics</h1>
+<h1 class="font-serif text-[28px] font-bold tracking-tight mb-6">Analytics</h1>
 
 <!-- Date range filter -->
-<div class="filter-bar mb-6">
-    <a href="/analytics?days=7" class="filter-pill {% if days == 7 %}active{% endif %}">7 days</a>
-    <a href="/analytics?days=14" class="filter-pill {% if days == 14 %}active{% endif %}">14 days</a>
-    <a href="/analytics?days=30" class="filter-pill {% if days == 30 %}active{% endif %}">30 days</a>
-    <a href="/analytics?days=90" class="filter-pill {% if days == 90 %}active{% endif %}">90 days</a>
+<div class="flex flex-wrap items-center gap-2 mb-6">
+    <a href="/analytics?days=7" class="btn btn-xs {{ 'btn-primary' if days == 7 else 'btn-outline' }}">7 days</a>
+    <a href="/analytics?days=14" class="btn btn-xs {{ 'btn-primary' if days == 14 else 'btn-outline' }}">14 days</a>
+    <a href="/analytics?days=30" class="btn btn-xs {{ 'btn-primary' if days == 30 else 'btn-outline' }}">30 days</a>
+    <a href="/analytics?days=90" class="btn btn-xs {{ 'btn-primary' if days == 90 else 'btn-outline' }}">90 days</a>
 </div>
 
 <!-- KPI Cards -->
-<div class="card-grid card-grid-4 mb-6">
-    <div class="kpi-card">
-        <div class="kpi-label">Followers</div>
-        <div class="kpi-value">{{ latest.get('follower_count', 0) }}</div>
-        {% if prev.get('follower_count') %}
-        {% set delta = (latest.get('follower_count', 0) or 0) - (prev.get('follower_count', 0) or 0) %}
-        <div class="kpi-delta {{ 'up' if delta >= 0 else 'down' }}">
-            {{ '+' if delta >= 0 else '' }}{{ delta }} (7d)
+<div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body p-5">
+            <div class="text-xs font-medium uppercase tracking-widest opacity-50 mb-1">Followers</div>
+            <div class="text-2xl font-semibold text-brand-soft">{{ latest.get('follower_count', 0) }}</div>
+            {% if prev.get('follower_count') %}
+            {% set delta = (latest.get('follower_count', 0) or 0) - (prev.get('follower_count', 0) or 0) %}
+            <div class="text-xs font-medium mt-1 {{ 'text-success' if delta >= 0 else 'text-error' }}">
+                {{ '+' if delta >= 0 else '' }}{{ delta }} (7d)
+            </div>
+            {% endif %}
         </div>
-        {% endif %}
     </div>
-    <div class="kpi-card">
-        <div class="kpi-label">Avg Engagement</div>
-        <div class="kpi-value">{{ "%.1f" | format(latest.get('avg_engagement_rate', 0) or 0) }}%</div>
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body p-5">
+            <div class="text-xs font-medium uppercase tracking-widest opacity-50 mb-1">Avg Engagement</div>
+            <div class="text-2xl font-semibold text-brand-soft">{{ "%.1f" | format(latest.get('avg_engagement_rate', 0) or 0) }}%</div>
+        </div>
     </div>
-    <div class="kpi-card">
-        <div class="kpi-label">Total Reach</div>
-        <div class="kpi-value">{{ "{:,}".format(latest.get('total_reach', 0) or 0) }}</div>
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body p-5">
+            <div class="text-xs font-medium uppercase tracking-widest opacity-50 mb-1">Total Reach</div>
+            <div class="text-2xl font-semibold text-brand-soft">{{ "{:,}".format(latest.get('total_reach', 0) or 0) }}</div>
+        </div>
     </div>
-    <div class="kpi-card">
-        <div class="kpi-label">Total Impressions</div>
-        <div class="kpi-value">{{ "{:,}".format(latest.get('total_impressions', 0) or 0) }}</div>
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body p-5">
+            <div class="text-xs font-medium uppercase tracking-widest opacity-50 mb-1">Total Impressions</div>
+            <div class="text-2xl font-semibold text-brand-soft">{{ "{:,}".format(latest.get('total_impressions', 0) or 0) }}</div>
+        </div>
     </div>
 </div>
 
 <!-- Charts -->
 {% if snapshots %}
-<div class="card-grid card-grid-2 mb-6">
-    <div class="card">
-        <div class="section-label">Follower Growth</div>
-        <div class="chart-container"><canvas id="followersChart"></canvas></div>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body p-5">
+            <h2 class="text-xs font-medium uppercase tracking-widest opacity-50 mb-3">Follower Growth</h2>
+            <div class="relative w-full h-[260px]"><canvas id="followersChart"></canvas></div>
+        </div>
     </div>
-    <div class="card">
-        <div class="section-label">Engagement Rate</div>
-        <div class="chart-container"><canvas id="engagementChart"></canvas></div>
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body p-5">
+            <h2 class="text-xs font-medium uppercase tracking-widest opacity-50 mb-3">Engagement Rate</h2>
+            <div class="relative w-full h-[260px]"><canvas id="engagementChart"></canvas></div>
+        </div>
     </div>
 </div>
 
-<div class="card mb-6">
-    <div class="section-label">Impressions & Reach</div>
-    <div class="chart-container"><canvas id="reachChart"></canvas></div>
+<div class="card bg-base-100 shadow-sm mb-6">
+    <div class="card-body p-5">
+        <h2 class="text-xs font-medium uppercase tracking-widest opacity-50 mb-3">Impressions & Reach</h2>
+        <div class="relative w-full h-[260px]"><canvas id="reachChart"></canvas></div>
+    </div>
 </div>
 {% endif %}
 
-<!-- Performance by Pillar -->
 {% if by_pillar %}
-<div class="card mb-6">
-    <div class="section-label">Performance by Content Pillar</div>
-    <div class="chart-container"><canvas id="pillarChart"></canvas></div>
+<div class="card bg-base-100 shadow-sm mb-6">
+    <div class="card-body p-5">
+        <h2 class="text-xs font-medium uppercase tracking-widest opacity-50 mb-3">Performance by Content Pillar</h2>
+        <div class="relative w-full h-[260px]"><canvas id="pillarChart"></canvas></div>
+    </div>
 </div>
 {% endif %}
 
-<!-- AI Recommendations -->
 {% if reco and reco.recommendations %}
-<div class="section-label">AI Recommendations</div>
-<div class="reco-card mb-6">
-    <div class="text-xs text-muted mb-4">From {{ reco.snapshot_date }}</div>
-    <div class="pre-wrap text-sm">{{ reco.recommendations }}</div>
+<h2 class="text-xs font-medium uppercase tracking-widest opacity-50 mb-3">AI Recommendations</h2>
+<div class="card bg-primary/5 border border-primary/10 mb-6">
+    <div class="card-body p-5">
+        <div class="text-xs opacity-40 mb-4">From {{ reco.snapshot_date }}</div>
+        <div class="whitespace-pre-wrap break-words text-sm">{{ reco.recommendations }}</div>
+    </div>
 </div>
 {% endif %}
 
-<!-- Top Posts -->
 {% if top_posts %}
-<div class="section-label">Top Performing Posts</div>
-<div class="card">
-    <div class="table-wrap">
-        <table>
-            <thead>
-                <tr>
-                    <th>Topic</th>
-                    <th>Pillar</th>
-                    <th>Type</th>
-                    <th>Impressions</th>
-                    <th>Reach</th>
-                    <th>Likes</th>
-                    <th>Comments</th>
-                    <th>Saves</th>
-                    <th>Engagement</th>
-                </tr>
-            </thead>
-            <tbody>
-            {% for p in top_posts %}
-                <tr>
-                    <td class="text-sm rtl">{{ (p.topic or '')[:40] }}</td>
-                    <td class="text-sm">{{ (p.content_pillar or '').replace('_',' ') }}</td>
-                    <td class="text-sm">{{ p.content_type or '' }}</td>
-                    <td class="text-sm">{{ p.impressions or 0 }}</td>
-                    <td class="text-sm">{{ p.reach or 0 }}</td>
-                    <td class="text-sm">{{ p.likes or 0 }}</td>
-                    <td class="text-sm">{{ p.comments or 0 }}</td>
-                    <td class="text-sm">{{ p.saves or 0 }}</td>
-                    <td class="text-sm" style="font-weight:600;color:var(--green-soft)">{{ p.engagement or 0 }}</td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
+<h2 class="text-xs font-medium uppercase tracking-widest opacity-50 mb-3">Top Performing Posts</h2>
+<div class="card bg-base-100 shadow-sm">
+    <div class="card-body p-5">
+        <div class="overflow-x-auto">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Topic</th><th>Pillar</th><th>Type</th>
+                        <th>Impressions</th><th>Reach</th><th>Likes</th>
+                        <th>Comments</th><th>Saves</th><th>Engagement</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for p in top_posts %}
+                    <tr>
+                        <td class="text-sm" dir="rtl">{{ (p.topic or '')[:40] }}</td>
+                        <td class="text-sm">{{ (p.content_pillar or '').replace('_',' ') }}</td>
+                        <td class="text-sm">{{ p.content_type or '' }}</td>
+                        <td class="text-sm">{{ p.impressions or 0 }}</td>
+                        <td class="text-sm">{{ p.reach or 0 }}</td>
+                        <td class="text-sm">{{ p.likes or 0 }}</td>
+                        <td class="text-sm">{{ p.comments or 0 }}</td>
+                        <td class="text-sm">{{ p.saves or 0 }}</td>
+                        <td class="text-sm font-semibold text-brand-soft">{{ p.engagement or 0 }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 {% endif %}
@@ -123,100 +134,34 @@
 <script>
 const snapData = {{ snapshots_json | safe }};
 const labels = snapData.map(s => s.snapshot_date);
-
 const chartOpts = {
-    responsive: true,
-    maintainAspectRatio: false,
+    responsive: true, maintainAspectRatio: false,
     plugins: { legend: { display: false } },
     scales: { x: { grid: { display: false } }, y: { beginAtZero: false } },
     elements: { line: { tension: 0.3, borderWidth: 2 }, point: { radius: 2 } }
 };
-
-// Followers
 new Chart(document.getElementById('followersChart'), {
-    type: 'line',
-    data: {
-        labels: labels,
-        datasets: [{
-            data: snapData.map(s => s.follower_count),
-            borderColor: '#4A5D3A',
-            backgroundColor: 'rgba(74,93,58,0.1)',
-            fill: true,
-        }]
-    },
-    options: chartOpts
+    type: 'line', data: { labels, datasets: [{ data: snapData.map(s => s.follower_count), borderColor: '#4A5D3A', backgroundColor: 'rgba(74,93,58,0.1)', fill: true }] }, options: chartOpts
 });
-
-// Engagement
 new Chart(document.getElementById('engagementChart'), {
-    type: 'line',
-    data: {
-        labels: labels,
-        datasets: [{
-            data: snapData.map(s => s.avg_engagement_rate),
-            borderColor: '#8FA878',
-            backgroundColor: 'rgba(143,168,120,0.1)',
-            fill: true,
-        }]
-    },
-    options: chartOpts
+    type: 'line', data: { labels, datasets: [{ data: snapData.map(s => s.avg_engagement_rate), borderColor: '#8FA878', backgroundColor: 'rgba(143,168,120,0.1)', fill: true }] }, options: chartOpts
 });
-
-// Reach / Impressions
 new Chart(document.getElementById('reachChart'), {
-    type: 'line',
-    data: {
-        labels: labels,
-        datasets: [
-            {
-                label: 'Impressions',
-                data: snapData.map(s => s.total_impressions),
-                borderColor: '#5B8DB8',
-                backgroundColor: 'rgba(91,141,184,0.1)',
-                fill: true,
-            },
-            {
-                label: 'Reach',
-                data: snapData.map(s => s.total_reach),
-                borderColor: '#8FA878',
-                backgroundColor: 'rgba(143,168,120,0.1)',
-                fill: true,
-            }
-        ]
-    },
-    options: Object.assign({}, chartOpts, {plugins: { legend: { display: true, position: 'top' } }})
+    type: 'line', data: { labels, datasets: [
+        { label: 'Impressions', data: snapData.map(s => s.total_impressions), borderColor: '#5B8DB8', backgroundColor: 'rgba(91,141,184,0.1)', fill: true },
+        { label: 'Reach', data: snapData.map(s => s.total_reach), borderColor: '#8FA878', backgroundColor: 'rgba(143,168,120,0.1)', fill: true }
+    ] }, options: Object.assign({}, chartOpts, {plugins: { legend: { display: true, position: 'top' } }})
 });
 </script>
 {% endif %}
-
 {% if by_pillar %}
 <script>
 const pillarData = {{ by_pillar_json | safe }};
 new Chart(document.getElementById('pillarChart'), {
-    type: 'bar',
-    data: {
-        labels: pillarData.map(p => (p.content_pillar || '').replace(/_/g, ' ')),
-        datasets: [
-            {
-                label: 'Avg Engagement',
-                data: pillarData.map(p => p.avg_engagement || 0),
-                backgroundColor: '#4A5D3A',
-                borderRadius: 4,
-            },
-            {
-                label: 'Avg Impressions',
-                data: pillarData.map(p => p.avg_impressions || 0),
-                backgroundColor: '#5B8DB8',
-                borderRadius: 4,
-            }
-        ]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { position: 'top' } },
-        scales: { x: { grid: { display: false } }, y: { beginAtZero: true } }
-    }
+    type: 'bar', data: { labels: pillarData.map(p => (p.content_pillar || '').replace(/_/g, ' ')), datasets: [
+        { label: 'Avg Engagement', data: pillarData.map(p => p.avg_engagement || 0), backgroundColor: '#4A5D3A', borderRadius: 4 },
+        { label: 'Avg Impressions', data: pillarData.map(p => p.avg_impressions || 0), backgroundColor: '#5B8DB8', borderRadius: 4 }
+    ] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true } } }
 });
 </script>
 {% endif %}

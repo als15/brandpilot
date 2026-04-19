@@ -2,107 +2,108 @@
 {% block title %}Engagement Tasks{% endblock %}
 
 {% block content %}
-<h1 class="page-title">Leads & Engagement</h1>
+<h1 class="font-serif text-[28px] font-bold tracking-tight mb-6">Leads & Engagement</h1>
 
 <!-- Tabs -->
-<div class="tabs mb-6">
-    <a href="/leads" class="tab">Leads</a>
-    <a href="/engagement" class="tab active">Engagement Tasks</a>
+<div role="tablist" class="tabs tabs-bordered mb-6">
+    <a href="/leads" role="tab" class="tab">Leads</a>
+    <a href="/engagement" role="tab" class="tab tab-active">Engagement Tasks</a>
 </div>
 
 <!-- Summary cards -->
-<div class="card-grid card-grid-4 mb-6">
-    <div class="kpi-card">
-        <div class="kpi-label">Pending</div>
-        <div class="kpi-value" style="color:var(--status-pending)">{{ summary.get('pending', 0) }}</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body p-5">
+            <div class="text-xs font-medium uppercase tracking-widest opacity-50 mb-1">Pending</div>
+            <div class="text-2xl font-semibold text-info">{{ summary.get('pending', 0) }}</div>
+        </div>
     </div>
-    <div class="kpi-card">
-        <div class="kpi-label">Done</div>
-        <div class="kpi-value">{{ summary.get('done', 0) }}</div>
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body p-5">
+            <div class="text-xs font-medium uppercase tracking-widest opacity-50 mb-1">Done</div>
+            <div class="text-2xl font-semibold text-brand-soft">{{ summary.get('done', 0) }}</div>
+        </div>
     </div>
-    <div class="kpi-card">
-        <div class="kpi-label">Skipped</div>
-        <div class="kpi-value" style="color:var(--gray-text)">{{ summary.get('skipped', 0) }}</div>
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body p-5">
+            <div class="text-xs font-medium uppercase tracking-widest opacity-50 mb-1">Skipped</div>
+            <div class="text-2xl font-semibold opacity-40">{{ summary.get('skipped', 0) }}</div>
+        </div>
     </div>
-    <div class="kpi-card">
-        <div class="kpi-label">Completion Rate (30d)</div>
-        {% set total = (rate.get('total', 0) or 0) %}
-        {% set done = (rate.get('done', 0) or 0) %}
-        <div class="kpi-value">{{ "%.0f" | format(done / total * 100 if total > 0 else 0) }}%</div>
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body p-5">
+            <div class="text-xs font-medium uppercase tracking-widest opacity-50 mb-1">Completion Rate (30d)</div>
+            {% set total = (rate.get('total', 0) or 0) %}
+            {% set done = (rate.get('done', 0) or 0) %}
+            <div class="text-2xl font-semibold text-brand-soft">{{ "%.0f" | format(done / total * 100 if total > 0 else 0) }}%</div>
+        </div>
     </div>
 </div>
 
 <!-- Filters -->
-<div class="filter-bar">
-    <a href="/engagement?status=pending" class="filter-pill {% if status_filter == 'pending' %}active{% endif %}">Pending</a>
-    <a href="/engagement?status=done" class="filter-pill {% if status_filter == 'done' %}active{% endif %}">Done</a>
-    <a href="/engagement?status=skipped" class="filter-pill {% if status_filter == 'skipped' %}active{% endif %}">Skipped</a>
-    <a href="/engagement?status=" class="filter-pill {% if not status_filter %}active{% endif %}">All</a>
+<div class="flex flex-wrap items-center gap-2 mb-5">
+    <a href="/engagement?status=pending" class="btn btn-xs {{ 'btn-primary' if status_filter == 'pending' else 'btn-outline' }}">Pending</a>
+    <a href="/engagement?status=done" class="btn btn-xs {{ 'btn-primary' if status_filter == 'done' else 'btn-outline' }}">Done</a>
+    <a href="/engagement?status=skipped" class="btn btn-xs {{ 'btn-primary' if status_filter == 'skipped' else 'btn-outline' }}">Skipped</a>
+    <a href="/engagement?status=" class="btn btn-xs {{ 'btn-primary' if not status_filter else 'btn-outline' }}">All</a>
 </div>
 
-<!-- Tasks table -->
 {% if tasks %}
-<div class="card">
-    <div class="table-wrap">
-        <table>
-            <thead>
-                <tr>
-                    <th>Handle</th>
-                    <th>Action</th>
-                    <th>Suggested Comment</th>
-                    <th>Reason</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-            {% for task in tasks %}
-                <tr>
-                    <td class="text-sm">
-                        {% if task.target_handle %}
-                        <a href="https://instagram.com/{{ task.target_handle }}" target="_blank" rel="noopener"
-                           style="color:var(--brand-green)">@{{ task.target_handle }}</a>
-                        {% else %}—{% endif %}
-                    </td>
-                    <td><span class="badge badge-{{ task.action_type }}">{{ task.action_type }}</span></td>
-                    <td class="text-sm rtl" style="max-width:300px">
-                        {% if task.suggested_comment %}
-                        <span>{{ task.suggested_comment[:100] }}</span>
-                        <button class="btn btn-xs btn-secondary" style="margin-left:4px"
-                                onclick="navigator.clipboard.writeText('{{ task.suggested_comment | e }}'); this.textContent='Copied!'">
-                            Copy
-                        </button>
-                        {% else %}—{% endif %}
-                    </td>
-                    <td class="text-sm text-muted">{{ (task.reason or '')[:50] }}</td>
-                    <td id="status-{{ task.id }}">
-                        <span class="badge badge-{{ task.status }}">{{ task.status }}</span>
-                    </td>
-                    <td>
-                        {% if task.status == 'pending' %}
-                        <div class="flex gap-4">
-                            <button class="btn btn-primary btn-xs"
-                                    hx-post="/engagement/{{ task.id }}/done"
-                                    hx-target="#status-{{ task.id }}"
-                                    hx-swap="innerHTML">Done</button>
-                            <button class="btn btn-secondary btn-xs"
-                                    hx-post="/engagement/{{ task.id }}/skip"
-                                    hx-target="#status-{{ task.id }}"
-                                    hx-swap="innerHTML">Skip</button>
-                        </div>
-                        {% elif task.completed_at %}
-                        <span class="text-xs text-muted">{{ task.completed_at | datefmt }}</span>
-                        {% endif %}
-                    </td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
+<div class="card bg-base-100 shadow-sm">
+    <div class="card-body p-5">
+        <div class="overflow-x-auto">
+            <table class="table table-sm">
+                <thead>
+                    <tr><th>Handle</th><th>Action</th><th>Suggested Comment</th><th>Reason</th><th>Status</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                {% for task in tasks %}
+                    <tr>
+                        <td class="text-sm">
+                            {% if task.target_handle %}
+                            <a href="https://instagram.com/{{ task.target_handle }}" target="_blank" rel="noopener" class="text-primary">@{{ task.target_handle }}</a>
+                            {% else %}—{% endif %}
+                        </td>
+                        <td><span class="badge badge-sm badge-{{ task.action_type }}">{{ task.action_type }}</span></td>
+                        <td class="text-sm max-w-[300px]" dir="rtl">
+                            {% if task.suggested_comment %}
+                            <span>{{ task.suggested_comment[:100] }}</span>
+                            <button class="btn btn-xs btn-outline ml-1"
+                                    onclick="navigator.clipboard.writeText('{{ task.suggested_comment | e }}'); this.textContent='Copied!'">
+                                Copy
+                            </button>
+                            {% else %}—{% endif %}
+                        </td>
+                        <td class="text-sm opacity-60">{{ (task.reason or '')[:50] }}</td>
+                        <td id="status-{{ task.id }}">
+                            <span class="badge badge-sm badge-{{ task.status }}">{{ task.status }}</span>
+                        </td>
+                        <td>
+                            {% if task.status == 'pending' %}
+                            <div class="flex gap-2">
+                                <button class="btn btn-primary btn-xs"
+                                        hx-post="/engagement/{{ task.id }}/done"
+                                        hx-target="#status-{{ task.id }}"
+                                        hx-swap="innerHTML"
+                                        hx-disabled-elt="this">Done</button>
+                                <button class="btn btn-outline btn-xs"
+                                        hx-post="/engagement/{{ task.id }}/skip"
+                                        hx-target="#status-{{ task.id }}"
+                                        hx-swap="innerHTML"
+                                        hx-disabled-elt="this">Skip</button>
+                            </div>
+                            {% elif task.completed_at %}
+                            <span class="text-xs opacity-40">{{ task.completed_at | datefmt }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 {% else %}
-<div class="empty-state">
-    <div class="empty-state-text">No engagement tasks found</div>
-</div>
+<div class="text-center py-12 opacity-50 text-sm">No engagement tasks found</div>
 {% endif %}
 {% endblock %}

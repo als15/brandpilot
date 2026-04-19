@@ -1,23 +1,31 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="nord">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login — Capa &amp; Co Dashboard</title>
+    <title>Login — Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@700&family=Heebo:wght@300;400;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style type="text/tailwindcss">
+    @theme {
+        --font-sans: 'Heebo', 'DM Sans', sans-serif;
+        --font-serif: 'Frank Ruhl Libre', 'Playfair Display', serif;
+    }
+    </style>
 </head>
-<body>
-    <div class="login-page">
-        <form class="login-card" method="POST" action="/login">
-            <div class="login-title">קאפה ושות׳</div>
-            <div class="login-subtitle">Dashboard Login</div>
+<body class="font-sans min-h-screen flex items-center justify-center bg-neutral">
+    <div class="card bg-white/5 border border-white/10 w-full max-w-sm">
+        <form class="card-body gap-4" method="POST" action="/login">
+            <h1 class="text-[28px] font-bold text-center text-neutral-content font-serif" dir="rtl">קאפה ושות׳</h1>
+            <p class="text-center text-neutral-content/50 text-[13px] -mt-2">Dashboard Login</p>
             {% if error %}
-            <div class="login-error">{{ error }}</div>
+            <div role="alert" class="alert alert-error alert-sm text-sm py-2">{{ error }}</div>
             {% endif %}
-            <input type="password" name="password" class="login-input" placeholder="Password" autofocus required>
-            <button type="submit" class="login-btn">Sign In</button>
+            <input type="password" name="password" placeholder="Password" autofocus required
+                   class="input input-bordered w-full bg-white/5 border-white/12 text-neutral-content placeholder:text-neutral-content/30">
+            <button type="submit" class="btn btn-primary w-full">Sign In</button>
         </form>
     </div>
 </body>

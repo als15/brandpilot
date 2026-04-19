@@ -1,311 +1,725 @@
 {% extends "base.html" %}
 {% block title %}Post #{{ post.id }}{% endblock %}
 
+{% block head %}
+<style>
+    .queue-detail-shell {
+        display: grid;
+        grid-template-columns: minmax(0, 410px) minmax(0, 1fr);
+        gap: 28px;
+        align-items: start;
+    }
+
+    .queue-detail-panel {
+        position: relative;
+        background: linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(255,255,255,0.88) 100%);
+        border: 1px solid rgba(26,26,24,0.08);
+        border-radius: 28px;
+        box-shadow: 0 20px 48px rgba(26,26,24,0.08);
+        overflow: hidden;
+    }
+
+    .queue-detail-panel::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+            radial-gradient(circle at top right, rgba(143,168,120,0.14), transparent 34%),
+            radial-gradient(circle at bottom left, rgba(212,168,67,0.1), transparent 28%);
+        pointer-events: none;
+    }
+
+    .queue-detail-media-panel {
+        position: sticky;
+        top: 72px;
+    }
+
+    .queue-detail-media-frame {
+        position: relative;
+        padding: 18px;
+    }
+
+    .queue-detail-image {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        object-fit: cover;
+        border-radius: 22px;
+        background: rgba(26,26,24,0.04);
+        box-shadow: 0 24px 44px rgba(26,26,24,0.14);
+    }
+
+    .queue-detail-image-placeholder {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        border-radius: 22px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 32px;
+        color: rgba(26,26,24,0.48);
+        background:
+            linear-gradient(135deg, rgba(250,247,242,0.95), rgba(245,240,232,0.88)),
+            rgba(26,26,24,0.03);
+        border: 1px dashed rgba(26,26,24,0.12);
+    }
+
+    .queue-detail-image-placeholder strong {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--dark);
+        font-family: var(--font-serif);
+        font-size: 22px;
+        font-weight: 700;
+    }
+
+    .queue-detail-media-badge {
+        position: absolute;
+        top: 32px;
+        left: 32px;
+        box-shadow: 0 10px 24px rgba(26,26,24,0.12);
+    }
+
+    .queue-detail-media-note {
+        position: absolute;
+        right: 34px;
+        bottom: 32px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.88);
+        border: 1px solid rgba(26,26,24,0.08);
+        color: rgba(26,26,24,0.62);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        backdrop-filter: blur(10px);
+    }
+
+    .queue-detail-media-copy {
+        position: relative;
+        padding: 0 26px 26px;
+    }
+
+    .queue-detail-kicker {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+        color: rgba(26,26,24,0.45);
+        margin-bottom: 10px;
+    }
+
+    .queue-detail-media-title,
+    .queue-detail-content-title {
+        font-family: var(--font-serif);
+        font-size: clamp(26px, 2.8vw, 34px);
+        line-height: 1.08;
+        letter-spacing: -0.03em;
+        margin: 0 0 10px;
+        color: var(--dark);
+    }
+
+    .queue-detail-media-copy p,
+    .queue-detail-content-intro p {
+        font-size: 14px;
+        line-height: 1.75;
+        color: rgba(26,26,24,0.66);
+        margin: 0;
+    }
+
+    .queue-detail-chip-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 18px;
+    }
+
+    .queue-detail-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 12px;
+        border-radius: 999px;
+        border: 1px solid rgba(26,26,24,0.08);
+        background: rgba(250,247,242,0.82);
+        color: rgba(26,26,24,0.7);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+
+    .queue-detail-content-panel {
+        padding: 26px;
+    }
+
+    .queue-detail-content-intro {
+        position: relative;
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    .queue-detail-content-intro::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: -14px;
+        height: 1px;
+        background: linear-gradient(90deg, rgba(26,26,24,0.14), rgba(26,26,24,0));
+    }
+
+    .queue-detail-id {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 54px;
+        height: 54px;
+        border-radius: 18px;
+        background: rgba(74,93,58,0.08);
+        color: var(--brand-green);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        flex-shrink: 0;
+    }
+
+    .queue-detail-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+    }
+
+    .queue-detail-block {
+        position: relative;
+        padding: 18px 18px 16px;
+        border-radius: 22px;
+        border: 1px solid rgba(26,26,24,0.08);
+        background: linear-gradient(180deg, rgba(250,247,242,0.8) 0%, rgba(255,255,255,0.92) 100%);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.85);
+    }
+
+    .queue-detail-block-wide {
+        grid-column: 1 / -1;
+    }
+
+    .queue-detail-block-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+
+    .queue-detail-block-label {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.24em;
+        text-transform: uppercase;
+        color: rgba(26,26,24,0.45);
+    }
+
+    .queue-detail-edit {
+        flex-shrink: 0;
+    }
+
+    .queue-detail-note {
+        font-size: 11px;
+        color: rgba(74,93,58,0.72);
+        font-weight: 600;
+    }
+
+    .queue-detail-value {
+        font-size: 14px;
+        line-height: 1.75;
+        color: rgba(26,26,24,0.84);
+    }
+
+    .queue-detail-value strong {
+        color: var(--dark);
+        font-weight: 600;
+    }
+
+    .queue-detail-empty {
+        color: rgba(26,26,24,0.38);
+        font-style: italic;
+    }
+
+    .queue-detail-form {
+        display: none;
+    }
+
+    .queue-detail-form.is-open {
+        display: block;
+    }
+
+    .queue-detail-form .input,
+    .queue-detail-form .textarea {
+        width: 100%;
+        border-radius: 16px;
+        background: rgba(255,255,255,0.92);
+    }
+
+    .queue-detail-form-row {
+        display: flex;
+        gap: 10px;
+    }
+
+    .queue-detail-form-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+        margin-top: 12px;
+    }
+
+    .queue-detail-actions-panel {
+        grid-column: 1 / -1;
+        padding: 20px;
+        border-radius: 24px;
+        background: linear-gradient(145deg, rgba(26,26,24,0.98), rgba(42,42,38,0.96));
+        color: rgba(250,247,242,0.82);
+        box-shadow: 0 24px 40px rgba(26,26,24,0.18);
+    }
+
+    .queue-detail-actions-panel .queue-detail-block-label,
+    .queue-detail-actions-panel p {
+        color: rgba(250,247,242,0.64);
+    }
+
+    .queue-detail-actions-panel p {
+        margin: 6px 0 0;
+        font-size: 14px;
+        line-height: 1.7;
+    }
+
+    .queue-detail-actions-panel .btn {
+        box-shadow: none;
+    }
+
+    .queue-detail-regen-form {
+        grid-column: 1 / -1;
+        padding: 18px;
+        border-radius: 22px;
+        border: 1px solid rgba(26,26,24,0.08);
+        background: rgba(255,255,255,0.76);
+    }
+
+    .queue-detail-regen-form .input {
+        width: 100%;
+        border-radius: 16px;
+        background: rgba(255,255,255,0.92);
+    }
+
+    .queue-detail-published {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px 18px;
+        border-radius: 20px;
+        background: rgba(74,93,58,0.08);
+        color: var(--brand-green);
+    }
+
+    .queue-detail-published .queue-detail-value {
+        color: var(--brand-green);
+        font-weight: 600;
+    }
+
+    @media (max-width: 1023px) {
+        .queue-detail-shell {
+            grid-template-columns: 1fr;
+        }
+
+        .queue-detail-media-panel {
+            position: static;
+        }
+    }
+
+    @media (max-width: 720px) {
+        .queue-detail-content-panel {
+            padding: 20px;
+        }
+
+        .queue-detail-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .queue-detail-content-intro {
+            flex-direction: column;
+        }
+
+        .queue-detail-form-row {
+            flex-direction: column;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="flex items-center gap-4 mb-6">
-    <a href="/queue" class="btn btn-secondary btn-sm">&larr; Back to Queue</a>
-    <h1 class="page-title" style="margin-bottom:0">Post #{{ post.id }}</h1>
+    <a href="/queue" class="btn btn-outline btn-sm">&larr; Back to Queue</a>
+    <h1 class="font-serif text-[28px] font-bold tracking-tight" style="margin-bottom:0">Post #{{ post.id }}</h1>
     <span class="badge badge-{{ post.status }}" id="post-status-badge">{{ post.status.replace('_', ' ') }}</span>
 </div>
 
-<div class="detail-header">
-    {# ── Image area with skeleton pulse when generating ── #}
-    <div class="detail-image-wrap" id="image-area">
-        {% if post.image_url %}
-        <img src="{{ post.image_url }}" alt="" class="detail-image" id="detail-img"
-             onclick="this.classList.toggle('lightbox')"
-             style="cursor: zoom-in;">
-        {% elif post.status == 'draft' %}
-        <div class="detail-image skeleton-pulse" id="detail-img-placeholder">
-            <div class="skeleton-text">Generating image...</div>
-        </div>
-        {% else %}
-        <div class="detail-image" style="display:flex;align-items:center;justify-content:center;color:var(--gray-text);">
-            No image generated yet
-        </div>
-        {% endif %}
-    </div>
-
-    <div class="detail-info">
-        <div class="detail-field" id="schedule-field">
-            <div class="detail-field-label">
-                Schedule
-                {% if post.status in ('pending_approval', 'draft', 'approved') %}
-                <button class="btn btn-secondary btn-xs" style="margin-left:8px; font-size:11px; padding:2px 8px;"
-                        onclick="document.getElementById('schedule-display').style.display='none'; document.getElementById('schedule-edit').style.display='block';">
-                    Edit
-                </button>
-                {% endif %}
+<div class="queue-detail-shell">
+    <aside class="queue-detail-panel queue-detail-media-panel">
+        <div class="queue-detail-media-frame" id="image-area">
+            {% if post.image_url %}
+            <img src="{{ post.image_url }}" alt="" class="queue-detail-image cursor-zoom-in" id="detail-img"
+                 onclick="this.classList.toggle('lightbox')">
+            <span class="badge badge-{{ post.status }} queue-detail-media-badge">{{ post.status.replace('_', ' ') }}</span>
+            <div class="queue-detail-media-note">Click image to zoom</div>
+            {% elif post.status == 'draft' %}
+            <div class="skeleton queue-detail-image" id="detail-img-placeholder"></div>
+            <span class="badge badge-{{ post.status }} queue-detail-media-badge">{{ post.status.replace('_', ' ') }}</span>
+            <div class="queue-detail-media-note">Generating preview</div>
+            {% else %}
+            <div class="queue-detail-image-placeholder">
+                <div>
+                    <strong>No visual yet</strong>
+                    <span>This post is still waiting for a generated image.</span>
+                </div>
             </div>
-            <div class="detail-field-value" id="schedule-display">{{ post.scheduled_date or '—' }} {{ post.scheduled_time or '' }}</div>
-            <form id="schedule-edit" style="display:none"
-                  hx-post="/queue/{{ post.id }}/edit-schedule"
-                  hx-target="#schedule-field"
-                  hx-swap="outerHTML"
-                  hx-disabled-elt="find button[type='submit']">
-                <div class="flex gap-4">
-                    <input type="date" name="scheduled_date" value="{{ post.scheduled_date or '' }}"
-                           style="padding:6px 10px; border:1px solid var(--border); border-radius:8px; font-size:14px; background:var(--card-bg); color:var(--text); font-family:inherit;">
-                    <input type="time" name="scheduled_time" value="{{ post.scheduled_time or '' }}"
-                           style="padding:6px 10px; border:1px solid var(--border); border-radius:8px; font-size:14px; background:var(--card-bg); color:var(--text); font-family:inherit;">
-                </div>
-                <div class="flex gap-4 mt-2">
-                    <button type="submit" class="btn btn-primary btn-xs">
-                        <span class="btn-spinner"></span>
-                        <span class="btn-label">Save</span>
-                    </button>
-                    <button type="button" class="btn btn-secondary btn-xs"
-                            onclick="document.getElementById('schedule-display').style.display=''; document.getElementById('schedule-edit').style.display='none';">
-                        Cancel
-                    </button>
-                </div>
-            </form>
-        </div>
-
-        <div class="detail-field">
-            <div class="detail-field-label">Type / Pillar</div>
-            <div class="detail-field-value">{{ post.content_type or '—' }} &middot; {{ (post.content_pillar or '').replace('_', ' ') }}</div>
-        </div>
-
-        <div class="detail-field">
-            <div class="detail-field-label">Topic</div>
-            <div class="detail-field-value rtl">{{ post.topic or '—' }}</div>
-        </div>
-
-        <div class="detail-field" id="caption-field">
-            <div class="detail-field-label">
-                Caption
-                {% if post.status in ('pending_approval', 'draft', 'approved') %}
-                <button class="btn btn-secondary btn-xs" style="margin-left:8px; font-size:11px; padding:2px 8px;"
-                        onclick="document.getElementById('caption-display').style.display='none'; document.getElementById('caption-edit').style.display='block';">
-                    Edit
-                </button>
-                {% endif %}
-            </div>
-            <div class="detail-field-value rtl pre-wrap" id="caption-display">{{ post.caption or '—' }}</div>
-            <form id="caption-edit" style="display:none"
-                  hx-post="/queue/{{ post.id }}/edit-caption"
-                  hx-target="#caption-field"
-                  hx-swap="outerHTML"
-                  hx-disabled-elt="find button[type='submit']">
-                <textarea name="caption" rows="3" dir="rtl"
-                          style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px; background:var(--card-bg); color:var(--text); font-family:inherit; resize:vertical;">{{ post.caption or '' }}</textarea>
-                <div class="flex gap-4 mt-2">
-                    <button type="submit" class="btn btn-primary btn-xs">
-                        <span class="btn-spinner"></span>
-                        <span class="btn-label">Save</span>
-                    </button>
-                    <button type="button" class="btn btn-secondary btn-xs"
-                            onclick="document.getElementById('caption-display').style.display=''; document.getElementById('caption-edit').style.display='none';">
-                        Cancel
-                    </button>
-                </div>
-            </form>
-        </div>
-
-        <div class="detail-field" id="hashtags-field">
-            <div class="detail-field-label">
-                Hashtags
-                {% if post.status in ('pending_approval', 'draft', 'approved') %}
-                <button class="btn btn-secondary btn-xs" style="margin-left:8px; font-size:11px; padding:2px 8px;"
-                        onclick="document.getElementById('hashtags-display').style.display='none'; document.getElementById('hashtags-edit').style.display='block';">
-                    Edit
-                </button>
-                {% endif %}
-            </div>
-            <div class="detail-field-value rtl text-sm" id="hashtags-display">{{ post.hashtags or '—' }}</div>
-            <form id="hashtags-edit" style="display:none"
-                  hx-post="/queue/{{ post.id }}/edit-hashtags"
-                  hx-target="#hashtags-field"
-                  hx-swap="outerHTML"
-                  hx-disabled-elt="find button[type='submit']">
-                <input type="text" name="hashtags" dir="rtl" value="{{ post.hashtags or '' }}"
-                       style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px; background:var(--card-bg); color:var(--text);">
-                <div class="flex gap-4 mt-2">
-                    <button type="submit" class="btn btn-primary btn-xs">
-                        <span class="btn-spinner"></span>
-                        <span class="btn-label">Save</span>
-                    </button>
-                    <button type="button" class="btn btn-secondary btn-xs"
-                            onclick="document.getElementById('hashtags-display').style.display=''; document.getElementById('hashtags-edit').style.display='none';">
-                        Cancel
-                    </button>
-                </div>
-            </form>
-        </div>
-
-        <div class="detail-field">
-            <div class="detail-field-label">Visual Direction</div>
-            <div class="detail-field-value text-sm">{{ post.visual_direction or '—' }}</div>
-        </div>
-
-        {% if post.notes %}
-        <div class="detail-field">
-            <div class="detail-field-label">Notes</div>
-            <div class="detail-field-value text-sm pre-wrap">{{ post.notes }}</div>
-        </div>
-        {% endif %}
-
-        {# ── Action buttons (unified across statuses) ── #}
-        {% if post.status in ('draft', 'pending_approval', 'rejected') %}
-        <div class="flex gap-4 mt-4 flex-wrap" id="approval-actions">
-
-            {# Approve (only when there's an image) #}
-            {% if post.status in ('draft', 'pending_approval') and post.image_url %}
-            <button class="btn btn-primary" id="btn-approve"
-                    onclick="showInlineConfirm(this, 'Approve this post?', '/queue/{{ post.id }}/approve', '#approval-actions')">
-                <span class="btn-spinner"></span>
-                <span class="btn-label">Approve</span>
-            </button>
-            {% endif %}
-
-            {# Regenerate suggestions #}
-            <button class="btn btn-secondary"
-                    hx-post="/queue/{{ post.id }}/suggestions"
-                    hx-target="#regen-area"
-                    hx-swap="innerHTML"
-                    hx-indicator="#regen-spinner"
-                    hx-disabled-elt="this">
-                <span class="btn-spinner"></span>
-                <span class="btn-label">Regenerate</span>
-            </button>
-
-            {# Regen + Direction toggle #}
-            <button class="btn btn-secondary" id="btn-regen-direction"
-                    onclick="document.getElementById('direct-regen-form').style.display='block'; this.style.display='none';">
-                Regen + Direction
-            </button>
-
-            {# Reject (only pending_approval) #}
-            {% if post.status == 'pending_approval' %}
-            <button class="btn btn-danger" id="btn-reject"
-                    onclick="showInlineConfirm(this, 'Reject this post?', '/queue/{{ post.id }}/reject', '#approval-actions')">
-                <span class="btn-spinner"></span>
-                <span class="btn-label">Reject</span>
-            </button>
-            {% endif %}
-
-            {# Requeue (only rejected) #}
-            {% if post.status == 'rejected' %}
-            <button class="btn btn-secondary" id="btn-requeue"
-                    onclick="showInlineConfirm(this, 'Requeue for review?', '/queue/{{ post.id }}/requeue', '#approval-actions')">
-                <span class="btn-spinner"></span>
-                <span class="btn-label">Requeue</span>
-            </button>
+            <span class="badge badge-{{ post.status }} queue-detail-media-badge">{{ post.status.replace('_', ' ') }}</span>
             {% endif %}
         </div>
 
-        {# ── Single consolidated Regen + Direction form ── #}
-        <div id="direct-regen-form" style="display:none" class="mt-4">
-            <form hx-post="/queue/{{ post.id }}/direct-regen"
-                  hx-target="#regen-area"
-                  hx-swap="innerHTML"
-                  hx-indicator="#direct-regen-spinner"
-                  hx-disabled-elt="find button[type='submit']"
-                  _="on htmx:afterRequest call startPolling()">
-                <div class="detail-field-label mb-2">Your direction</div>
-                <input type="text" name="direction" required
-                       placeholder="e.g. tiramisu close up, babka with chocolate drizzle..."
-                       style="width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px; background:var(--card-bg); color:var(--text);">
-                <div class="flex gap-4 mt-3 items-center">
-                    <button type="submit" class="btn btn-primary btn-sm">
-                        <span class="btn-spinner"></span>
-                        <span class="btn-label">Generate</span>
-                    </button>
-                    <button type="button" class="btn btn-secondary btn-sm"
-                            onclick="document.getElementById('direct-regen-form').style.display='none'; document.getElementById('btn-regen-direction').style.display='';">
-                        Cancel
-                    </button>
-                    <span id="direct-regen-spinner" class="htmx-indicator text-sm text-muted">Generating image & caption...</span>
-                </div>
-            </form>
-        </div>
-        {% endif %}
+        <div class="queue-detail-media-copy">
+            <div class="queue-detail-kicker">Creative Review</div>
+            <h2 class="queue-detail-media-title">Shape the post before it goes live.</h2>
+            <p>Review the visual, refine the copy, and move the post through approval without leaving this page.</p>
 
-        {% if post.published_at %}
-        <div class="detail-field mt-4">
-            <div class="detail-field-label">Published</div>
-            <div class="detail-field-value text-sm">{{ post.published_at }}</div>
+            <div class="queue-detail-chip-row">
+                <span class="queue-detail-chip">{{ post.content_type or 'No type' }}</span>
+                <span class="queue-detail-chip" id="content-pillar-chip">{{ (post.content_pillar or 'No pillar').replace('_', ' ') }}</span>
+                <span class="queue-detail-chip">{{ post.scheduled_date or 'Unscheduled' }}</span>
+            </div>
         </div>
-        {% endif %}
-    </div>
+    </aside>
+
+    <section class="queue-detail-panel queue-detail-content-panel">
+        <div class="queue-detail-content-intro">
+            <div>
+                <div class="queue-detail-kicker">Post Snapshot</div>
+                <h2 class="queue-detail-content-title" id="topic-title">{{ post.topic or 'Untitled post' }}</h2>
+                <p>A clearer editorial layout for scheduling, copy review, and last-mile approval actions.</p>
+            </div>
+            <div class="queue-detail-id">#{{ post.id }}</div>
+        </div>
+
+        <div class="queue-detail-grid">
+            <div class="queue-detail-block" id="schedule-field">
+                <div class="queue-detail-block-header">
+                    <div class="queue-detail-block-label">Schedule</div>
+                    {% if post.status in ('pending_approval', 'draft', 'approved') %}
+                    <button class="btn btn-outline btn-xs queue-detail-edit"
+                            onclick="document.getElementById('schedule-display').style.display='none'; document.getElementById('schedule-edit').style.display='block';">
+                        Edit
+                    </button>
+                    {% endif %}
+                </div>
+                <div class="queue-detail-value {% if not post.scheduled_date and not post.scheduled_time %}queue-detail-empty{% endif %}" id="schedule-display">
+                    {% if post.scheduled_date or post.scheduled_time %}
+                    {{ post.scheduled_date or '—' }}{% if post.scheduled_time %} {{ post.scheduled_time }}{% endif %}
+                    {% else %}
+                    —
+                    {% endif %}
+                </div>
+                <form id="schedule-edit" class="queue-detail-form"
+                      hx-post="/queue/{{ post.id }}/edit-schedule"
+                      hx-target="#schedule-field"
+                      hx-swap="outerHTML"
+                      hx-disabled-elt="find button[type='submit']">
+                    <div class="queue-detail-form-row">
+                        <input type="date" name="scheduled_date" value="{{ post.scheduled_date or '' }}" class="input input-bordered input-sm">
+                        <input type="time" name="scheduled_time" value="{{ post.scheduled_time or '' }}" class="input input-bordered input-sm">
+                    </div>
+                    <div class="queue-detail-form-actions">
+                        <button type="submit" class="btn btn-primary btn-xs">
+                            <span class="loading loading-spinner loading-xs htmx-indicator"></span> Save
+                        </button>
+                        <button type="button" class="btn btn-outline btn-xs"
+                                onclick="document.getElementById('schedule-display').style.display=''; document.getElementById('schedule-edit').style.display='none';">
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="queue-detail-block">
+                <div class="queue-detail-block-header">
+                    <div class="queue-detail-block-label">Type / Pillar</div>
+                    {% if post.status != 'published' %}
+                    <button class="btn btn-outline btn-xs queue-detail-edit"
+                            hx-post="/queue/{{ post.id }}/convert-type"
+                            hx-confirm="{% if post.content_type == 'story' %}Convert this story to a feed post?{% else %}Convert this to a story?{% endif %}"
+                            hx-disabled-elt="this">
+                        {% if post.content_type == 'story' %}Convert to Post{% else %}Convert to Story{% endif %}
+                    </button>
+                    {% endif %}
+                </div>
+                <div class="queue-detail-value">
+                    <strong>{{ post.content_type or '—' }}</strong> &middot; <span id="content-pillar-display">{{ (post.content_pillar or '—').replace('_', ' ') }}</span>
+                </div>
+            </div>
+
+            <div class="queue-detail-block queue-detail-block-wide">
+                <div class="queue-detail-block-header">
+                    <div class="queue-detail-block-label">Topic</div>
+                </div>
+                <div class="queue-detail-value {% if not post.topic %}queue-detail-empty{% endif %}" dir="rtl" id="topic-display">{{ post.topic or '—' }}</div>
+            </div>
+
+            <div class="queue-detail-block queue-detail-block-wide" id="caption-field">
+                <div class="queue-detail-block-header">
+                    <div class="queue-detail-block-label">Caption</div>
+                    {% if post.status in ('pending_approval', 'draft', 'approved') %}
+                    <button class="btn btn-outline btn-xs queue-detail-edit"
+                            onclick="document.getElementById('caption-display').style.display='none'; document.getElementById('caption-edit').style.display='block';">
+                        Edit
+                    </button>
+                    {% endif %}
+                </div>
+                <div class="queue-detail-value whitespace-pre-wrap break-words {% if not post.caption %}queue-detail-empty{% endif %}" dir="rtl" id="caption-display">{{ post.caption or '—' }}</div>
+                <form id="caption-edit" class="queue-detail-form"
+                      hx-post="/queue/{{ post.id }}/edit-caption"
+                      hx-target="#caption-field"
+                      hx-swap="outerHTML"
+                      hx-disabled-elt="find button[type='submit']">
+                    <textarea name="caption" rows="4" dir="rtl"
+                              class="textarea textarea-bordered text-sm">{{ post.caption or '' }}</textarea>
+                    <div class="queue-detail-form-actions">
+                        <button type="submit" class="btn btn-primary btn-xs">
+                            <span class="loading loading-spinner loading-xs htmx-indicator"></span> Save
+                        </button>
+                        <button type="button" class="btn btn-outline btn-xs"
+                                onclick="document.getElementById('caption-display').style.display=''; document.getElementById('caption-edit').style.display='none';">
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="queue-detail-block queue-detail-block-wide" id="hashtags-field">
+                <div class="queue-detail-block-header">
+                    <div class="queue-detail-block-label">Hashtags</div>
+                    {% if post.status in ('pending_approval', 'draft', 'approved') %}
+                    <button class="btn btn-outline btn-xs queue-detail-edit"
+                            onclick="document.getElementById('hashtags-display').style.display='none'; document.getElementById('hashtags-edit').style.display='block';">
+                        Edit
+                    </button>
+                    {% endif %}
+                </div>
+                <div class="queue-detail-value {% if not post.hashtags %}queue-detail-empty{% endif %}" dir="rtl" id="hashtags-display">{{ post.hashtags or '—' }}</div>
+                <form id="hashtags-edit" class="queue-detail-form"
+                      hx-post="/queue/{{ post.id }}/edit-hashtags"
+                      hx-target="#hashtags-field"
+                      hx-swap="outerHTML"
+                      hx-disabled-elt="find button[type='submit']">
+                    <input type="text" name="hashtags" dir="rtl" value="{{ post.hashtags or '' }}"
+                           class="input input-bordered input-sm">
+                    <div class="queue-detail-form-actions">
+                        <button type="submit" class="btn btn-primary btn-xs">
+                            <span class="loading loading-spinner loading-xs htmx-indicator"></span> Save
+                        </button>
+                        <button type="button" class="btn btn-outline btn-xs"
+                                onclick="document.getElementById('hashtags-display').style.display=''; document.getElementById('hashtags-edit').style.display='none';">
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="queue-detail-block">
+                <div class="queue-detail-block-header">
+                    <div class="queue-detail-block-label">Visual Direction</div>
+                </div>
+                <div class="queue-detail-value {% if not post.visual_direction %}queue-detail-empty{% endif %}" id="visual-direction-display">{{ post.visual_direction or '—' }}</div>
+            </div>
+
+            {% if post.notes %}
+            <div class="queue-detail-block">
+                <div class="queue-detail-block-header">
+                    <div class="queue-detail-block-label">Notes</div>
+                </div>
+                <div class="queue-detail-value whitespace-pre-wrap break-words">{{ post.notes }}</div>
+            </div>
+            {% endif %}
+
+            {% if post.status in ('draft', 'pending_approval', 'rejected') %}
+            <div class="queue-detail-actions-panel">
+                <div class="queue-detail-block-label">Workflow Actions</div>
+                <p>Approve when the creative is ready, reject when it needs a rewrite, or regenerate from fresh direction.</p>
+
+                <div class="flex gap-2 mt-4 flex-wrap" id="approval-actions">
+                    {% if post.status in ('draft', 'pending_approval') and post.image_url %}
+                    <button class="btn btn-primary" id="btn-approve"
+                            onclick="showInlineConfirm(this, 'Approve this post?', '/queue/{{ post.id }}/approve', '#approval-actions')">
+                        Approve
+                    </button>
+                    {% endif %}
+
+                    <button class="btn btn-outline"
+                            hx-post="/queue/{{ post.id }}/suggestions"
+                            hx-target="#regen-area"
+                            hx-swap="innerHTML"
+                            hx-indicator="#regen-spinner"
+                            hx-disabled-elt="this">
+                        <span class="loading loading-spinner loading-sm htmx-indicator" id="regen-spinner-btn"></span>
+                        Regenerate
+                    </button>
+
+                    <button class="btn btn-outline" id="btn-regen-direction"
+                            onclick="document.getElementById('direct-regen-form').style.display='block'; this.style.display='none';">
+                        Regen + Direction
+                    </button>
+
+                    {% if post.image_url %}
+                    <button class="btn btn-outline" id="btn-refine"
+                            onclick="document.getElementById('refine-form').style.display='block'; this.style.display='none';">
+                        Refine Image
+                    </button>
+                    {% endif %}
+
+                    {% if post.status == 'pending_approval' %}
+                    <button class="btn btn-error" id="btn-reject"
+                            onclick="showInlineConfirm(this, 'Reject this post?', '/queue/{{ post.id }}/reject', '#approval-actions')">
+                        Reject
+                    </button>
+                    {% endif %}
+
+                    {% if post.status == 'rejected' %}
+                    <button class="btn btn-outline" id="btn-requeue"
+                            onclick="showInlineConfirm(this, 'Requeue for review?', '/queue/{{ post.id }}/requeue', '#approval-actions')">
+                        Requeue
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div id="direct-regen-form" style="display:none" class="queue-detail-regen-form">
+                <form hx-post="/queue/{{ post.id }}/direct-regen"
+                      hx-target="#regen-area"
+                      hx-swap="innerHTML"
+                      hx-indicator="#direct-regen-spinner"
+                      hx-disabled-elt="find button[type='submit']">
+                    <div class="queue-detail-block-label">Your Direction</div>
+                    <input type="text" name="direction" required
+                           placeholder="e.g. tiramisu close up, babka with chocolate drizzle..."
+                           class="input input-bordered input-sm mt-3">
+                    <input type="url" name="reference_url"
+                           placeholder="Reference image URL (optional)"
+                           class="input input-bordered input-sm mt-2">
+                    <div class="queue-detail-form-actions">
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <span class="loading loading-spinner loading-sm htmx-indicator" id="direct-regen-spinner"></span>
+                            Generate
+                        </button>
+                        <button type="button" class="btn btn-outline btn-sm"
+                                onclick="document.getElementById('direct-regen-form').style.display='none'; document.getElementById('btn-regen-direction').style.display='';">
+                            Cancel
+                        </button>
+                        <span class="htmx-indicator text-sm opacity-60">Generating image & caption...</span>
+                    </div>
+                </form>
+            </div>
+
+            {% if post.image_url %}
+            <div id="refine-form" style="display:none" class="queue-detail-regen-form">
+                <form hx-post="/queue/{{ post.id }}/refine"
+                      hx-target="#regen-area"
+                      hx-swap="innerHTML"
+                      hx-indicator="#refine-spinner"
+                      hx-disabled-elt="find button[type='submit']">
+                    <div class="queue-detail-block-label">Refine Current Image</div>
+                    <p class="text-xs opacity-60 mt-1">Describe the change. The current image is used as the reference — each refine builds on the previous one.</p>
+                    <input type="text" name="direction" required
+                           placeholder="e.g. add my logo in the middle, make it warmer, add vanilla beans..."
+                           class="input input-bordered input-sm mt-3">
+                    <div class="queue-detail-form-actions">
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <span class="loading loading-spinner loading-sm htmx-indicator" id="refine-spinner"></span>
+                            Refine
+                        </button>
+                        <button type="button" class="btn btn-outline btn-sm"
+                                onclick="document.getElementById('refine-form').style.display='none'; document.getElementById('btn-refine').style.display='';">
+                            Cancel
+                        </button>
+                        <span class="htmx-indicator text-sm opacity-60">Refining image...</span>
+                    </div>
+                </form>
+            </div>
+            {% endif %}
+            {% endif %}
+
+            {% if post.published_at %}
+            <div class="queue-detail-published">
+                <div>
+                    <div class="queue-detail-block-label">Published</div>
+                    <div class="queue-detail-value">{{ post.published_at }}</div>
+                </div>
+                <span class="badge badge-published">Live</span>
+            </div>
+            {% endif %}
+        </div>
+    </section>
 </div>
 
 <!-- Regeneration suggestions area -->
 <div id="regen-area" class="mt-6">
-    <span id="regen-spinner" class="htmx-indicator text-sm text-muted">Generating suggestions...</span>
+    <span id="regen-spinner" class="htmx-indicator text-sm opacity-60">
+        <span class="loading loading-spinner loading-sm"></span> Generating suggestions...
+    </span>
 </div>
 
 {% if perf %}
-<div class="section-label mt-6">Post Performance</div>
-<div class="card-grid card-grid-3">
-    <div class="kpi-card">
-        <div class="kpi-label">Impressions</div>
-        <div class="kpi-value">{{ perf.impressions or 0 }}</div>
+<h2 class="text-xs font-medium uppercase tracking-widest opacity-50 mb-3 mt-6">Post Performance</h2>
+<div class="grid grid-cols-2 lg:grid-cols-3 gap-4">
+    {% for label, val in [('Impressions', perf.impressions), ('Reach', perf.reach), ('Engagement', perf.engagement), ('Likes', perf.likes), ('Comments', perf.comments), ('Saves', perf.saves)] %}
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body p-4">
+            <div class="text-xs font-medium uppercase tracking-widest opacity-50 mb-1">{{ label }}</div>
+            <div class="text-2xl font-semibold text-brand-soft">{{ val or 0 }}</div>
+        </div>
     </div>
-    <div class="kpi-card">
-        <div class="kpi-label">Reach</div>
-        <div class="kpi-value">{{ perf.reach or 0 }}</div>
-    </div>
-    <div class="kpi-card">
-        <div class="kpi-label">Engagement</div>
-        <div class="kpi-value">{{ perf.engagement or 0 }}</div>
-    </div>
-    <div class="kpi-card">
-        <div class="kpi-label">Likes</div>
-        <div class="kpi-value">{{ perf.likes or 0 }}</div>
-    </div>
-    <div class="kpi-card">
-        <div class="kpi-label">Comments</div>
-        <div class="kpi-value">{{ perf.comments or 0 }}</div>
-    </div>
-    <div class="kpi-card">
-        <div class="kpi-label">Saves</div>
-        <div class="kpi-value">{{ perf.saves or 0 }}</div>
-    </div>
+    {% endfor %}
 </div>
 {% endif %}
 {% endblock %}
 
 {% block scripts %}
-<style>
-.detail-image.lightbox {
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    width: 100vw;
-    height: 100vh;
-    object-fit: contain;
-    background: rgba(0,0,0,0.9);
-    z-index: 1000;
-    border-radius: 0;
-    cursor: zoom-out;
-}
-</style>
-
-{# ── Toast container ── #}
-<div class="toast-container" id="toast-container"></div>
+{# Toast container #}
+<div class="toast toast-end toast-top z-50" id="toast-container" style="top: 60px;"></div>
 
 <script>
-/* ── Toast system ────────────────────────────────────────── */
+/* ── Toast system ── */
 function showToast(message, type) {
     type = type || 'success';
     var container = document.getElementById('toast-container');
-    var toast = document.createElement('div');
-    toast.className = 'toast toast-' + type;
-    toast.textContent = message;
-    container.appendChild(toast);
+    var alertClass = type === 'error' ? 'alert-error' : type === 'info' ? 'alert-info' : 'alert-success';
+    var el = document.createElement('div');
+    el.className = 'alert ' + alertClass + ' text-sm shadow-lg animate-fade-in';
+    el.textContent = message;
+    container.appendChild(el);
     setTimeout(function() {
-        toast.classList.add('toast-out');
-        setTimeout(function() { toast.remove(); }, 300);
+        el.style.opacity = '0';
+        el.style.transition = 'opacity 0.3s';
+        setTimeout(function() { el.remove(); }, 300);
     }, 3000);
 }
 
-/* ── Inline confirm (replaces browser confirm()) ─────────── */
+/* ── Inline confirm ── */
 function showInlineConfirm(btn, label, url, target) {
     var wrapper = btn.parentNode;
     var originalButtons = [];
-
-    // Hide all sibling buttons
     Array.from(wrapper.children).forEach(function(child) {
         if (child.nodeType === 1 && child !== btn) {
             originalButtons.push({ el: child, display: child.style.display });
@@ -314,17 +728,14 @@ function showInlineConfirm(btn, label, url, target) {
     });
     btn.style.display = 'none';
 
-    // Create inline confirm
     var confirm = document.createElement('div');
     confirm.className = 'inline-confirm';
     confirm.innerHTML =
         '<span class="confirm-label">' + label + '</span>' +
         '<button class="btn btn-primary btn-sm" id="confirm-yes">' +
-            '<span class="btn-spinner"></span>' +
-            '<span class="btn-label">Yes</span>' +
+            '<span class="loading loading-spinner loading-xs" style="display:none"></span> Yes' +
         '</button>' +
-        '<button class="btn btn-secondary btn-sm" id="confirm-no">No</button>';
-
+        '<button class="btn btn-outline btn-sm" id="confirm-no">No</button>';
     wrapper.appendChild(confirm);
 
     function cleanup() {
@@ -334,116 +745,113 @@ function showInlineConfirm(btn, label, url, target) {
     }
 
     confirm.querySelector('#confirm-no').addEventListener('click', cleanup);
-
     confirm.querySelector('#confirm-yes').addEventListener('click', function() {
         var yesBtn = this;
         yesBtn.disabled = true;
-        yesBtn.querySelector('.btn-spinner').style.display = 'inline-block';
+        yesBtn.querySelector('.loading').style.display = 'inline-block';
 
         fetch(url, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'HX-Request': 'true',
-            },
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'HX-Request': 'true' },
             credentials: 'same-origin',
         })
         .then(function(r) { return r.text(); })
         .then(function(html) {
             var targetEl = document.querySelector(target);
-            if (targetEl) {
-                targetEl.innerHTML = html;
-                htmx.process(targetEl);
-            }
-            // Show success toast
+            if (targetEl) { targetEl.innerHTML = html; htmx.process(targetEl); }
             if (url.indexOf('/approve') !== -1)  showToast('Post approved');
             if (url.indexOf('/reject') !== -1)   showToast('Post rejected', 'info');
             if (url.indexOf('/requeue') !== -1)   showToast('Post requeued', 'info');
         })
-        .catch(function() {
-            showToast('Action failed — try again', 'error');
-            cleanup();
-        });
+        .catch(function() { showToast('Action failed', 'error'); cleanup(); });
     });
 }
 
-/* ── Polling for background image generation ─────────────── */
+/* ── Polling for background image generation ── */
 var pollTimer = null;
 var pollCount = 0;
-var POST_ID = {{ post.id }};
+var POST_ID = Number('{{ post.id }}');
 
 function startPolling() {
-    if (pollTimer) return; // already polling
+    if (pollTimer) return;
     pollCount = 0;
-
-    // Show skeleton pulse immediately
     var imageArea = document.getElementById('image-area');
     if (imageArea) {
         imageArea.innerHTML =
-            '<div class="detail-image skeleton-pulse" id="detail-img-placeholder">' +
-                '<div class="skeleton-text">Generating image...</div>' +
-            '</div>';
+            '<div class="skeleton queue-detail-image"></div>' +
+            '<span class="badge badge-draft queue-detail-media-badge">draft</span>' +
+            '<div class="queue-detail-media-note">Generating preview</div>';
     }
-
     pollTimer = setInterval(checkPostStatus, 4000);
 }
 
 function stopPolling() {
-    if (pollTimer) {
-        clearInterval(pollTimer);
-        pollTimer = null;
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+}
+
+function formatPillarLabel(value) {
+    return value ? value.replace(/_/g, ' ') : '';
+}
+
+function setDisplayText(id, value, fallback, emptyClass, formatter) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var text = value || '';
+    if (formatter) text = formatter(text);
+    if (!text) text = fallback;
+    el.textContent = text;
+    if (emptyClass) {
+        if (value) el.classList.remove(emptyClass);
+        else el.classList.add(emptyClass);
     }
 }
 
 function checkPostStatus() {
     pollCount++;
-    // Stop after ~3 minutes (45 * 4s)
     if (pollCount > 45) {
         stopPolling();
         showToast('Generation is taking longer than expected. Refresh to check.', 'info');
         return;
     }
-
     fetch('/queue/' + POST_ID + '/poll-status', { credentials: 'same-origin' })
         .then(function(r) { return r.json(); })
         .catch(function() { return null; })
         .then(function(data) {
             if (!data) return;
-
             if (data.image_url && data.status !== 'draft') {
                 stopPolling();
-                // Update image
                 var imageArea = document.getElementById('image-area');
                 if (imageArea) {
                     imageArea.innerHTML =
-                        '<img src="' + data.image_url + '" alt="" class="detail-image fade-in" ' +
-                        'id="detail-img" onclick="this.classList.toggle(\'lightbox\')" style="cursor:zoom-in;">';
+                        '<img src="' + data.image_url + '" alt="" class="queue-detail-image cursor-zoom-in animate-fade-in" ' +
+                        'id="detail-img" onclick="this.classList.toggle(\'lightbox\')">' +
+                        '<span class="badge badge-' + data.status + ' queue-detail-media-badge">' + data.status.replace('_', ' ') + '</span>' +
+                        '<div class="queue-detail-media-note">Click image to zoom</div>';
                 }
-                // Update status badge
                 var badge = document.getElementById('post-status-badge');
                 if (badge) {
                     badge.className = 'badge badge-' + data.status;
                     badge.textContent = data.status.replace('_', ' ');
                 }
-                // Update caption if returned
-                if (data.caption) {
-                    var capDisplay = document.getElementById('caption-display');
-                    if (capDisplay) capDisplay.textContent = data.caption;
-                }
+                setDisplayText('topic-title', data.topic, 'Untitled post');
+                setDisplayText('topic-display', data.topic, '—', 'queue-detail-empty');
+                setDisplayText('caption-display', data.caption, '—', 'queue-detail-empty');
+                setDisplayText('hashtags-display', data.hashtags, '—', 'queue-detail-empty');
+                setDisplayText('visual-direction-display', data.visual_direction, '—', 'queue-detail-empty');
+                setDisplayText('content-pillar-display', data.content_pillar, '—', null, formatPillarLabel);
+                setDisplayText('content-pillar-chip', data.content_pillar, 'No pillar', null, formatPillarLabel);
                 showToast('Image generated successfully');
             }
         });
 }
 
-/* ── Auto-start polling if post is draft with no image ── */
-{% if post.status == 'draft' and not post.image_url %}
-document.addEventListener('DOMContentLoaded', function() { startPolling(); });
-{% endif %}
+if ('{{ "true" if post.status == "draft" and not post.image_url else "false" }}' === 'true') {
+    document.addEventListener('DOMContentLoaded', function() { startPolling(); });
+}
 
-/* ── Hook HTMX events for toast feedback ─────────────────── */
 document.body.addEventListener('htmx:afterRequest', function(e) {
     var path = (e.detail.pathInfo && e.detail.pathInfo.requestPath) || '';
-    if (path.indexOf('/direct-regen') !== -1 || path.indexOf('/regenerate') !== -1) {
+    if (path.indexOf('/direct-regen') !== -1 || path.indexOf('/regenerate') !== -1 || path.indexOf('/refine') !== -1) {
         startPolling();
     }
     if (path.indexOf('/edit-schedule') !== -1 || path.indexOf('/edit-caption') !== -1 || path.indexOf('/edit-hashtags') !== -1) {

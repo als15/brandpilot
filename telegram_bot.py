@@ -251,7 +251,7 @@ async def approval_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("regen_"):
         post_id = int(data.split("_", 1)[1])
         row = db.execute(
-            "SELECT topic, status, visual_direction FROM content_queue WHERE id = ?",
+            "SELECT topic, status, visual_direction, content_type FROM content_queue WHERE id = ?",
             (post_id,),
         ).fetchone()
         if not row:
@@ -268,7 +268,7 @@ async def approval_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from tools.image_gen import generate_one
 
         prompt = build_image_prompt.invoke(row["visual_direction"])
-        new_url = generate_one(prompt)
+        new_url = generate_one(prompt, content_type=row["content_type"] or "photo")
 
         db.execute("UPDATE content_queue SET image_url = ? WHERE id = ?", (new_url, post_id))
         db.commit()
@@ -298,12 +298,44 @@ async def approval_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"Directing regen for: {row['topic']}\n\n"
                 "Send your direction as a message, e.g.:\n"
                 "  tiramisu close up\n"
-                "  babka with chocolate drizzle, overhead shot\n"
-                "  challah braiding process, warm light\n\n"
+                "  babka with chocolate drizzle, overhead shot\n\n"
+                "To add a reference image, paste a URL on the next line:\n"
+                "  challah braiding, warm light\n"
+                "  https://example.com/reference.jpg\n\n"
                 "I'll generate the image AND write a matching caption."
             )
         )
         log.info(f"Post {post_id} — directed regen mode activated.")
+        return
+
+    if data.startswith("refine_"):
+        post_id = int(data.split("_", 1)[1])
+        row = db.execute(
+            "SELECT topic, status, image_url FROM content_queue WHERE id = ?", (post_id,),
+        ).fetchone()
+        if not row:
+            await query.edit_message_caption(caption=f"Post {post_id} not found.")
+            return
+        if row["status"] != "pending_approval":
+            await query.edit_message_caption(caption=f"Post {post_id} is already '{row['status']}'.")
+            return
+        if not row["image_url"]:
+            await query.edit_message_caption(caption=f"Post {post_id} has no image to refine yet.")
+            return
+
+        context.user_data["refining_for"] = post_id
+        await query.edit_message_caption(
+            caption=(
+                f"Refining image for: {row['topic']}\n\n"
+                "Send the change you want as a message, e.g.:\n"
+                "  add my logo in the middle\n"
+                "  make the background warmer\n"
+                "  add vanilla beans on top\n\n"
+                "The current image is used as the reference — each refine "
+                "builds on the previous one."
+            )
+        )
+        log.info(f"Post {post_id} — refine mode activated.")
         return
 
 
@@ -326,6 +358,12 @@ async def text_message_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     post_id = context.user_data.pop("directing_regen_for", None)
     if post_id is not None:
         await _handle_directed_regen(update, context, post_id)
+        return
+
+    # Check if user is in refine mode
+    post_id = context.user_data.pop("refining_for", None)
+    if post_id is not None:
+        await _handle_refine(update, context, post_id)
         return
 
     # Not in any mode, ignore
@@ -366,7 +404,23 @@ async def _handle_caption_edit(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def _handle_directed_regen(update: Update, context: ContextTypes.DEFAULT_TYPE, post_id: int):
     """Process a directed regeneration: generate image from user's direction + LLM caption."""
-    user_direction = update.message.text.strip()
+    raw_text = update.message.text.strip()
+
+    # Parse optional reference image URL (any line starting with http:// or https://)
+    reference_url = None
+    direction_lines = []
+    for line in raw_text.split("\n"):
+        stripped = line.strip()
+        if stripped.startswith(("http://", "https://")) and not reference_url:
+            reference_url = stripped
+        else:
+            direction_lines.append(stripped)
+    user_direction = " ".join(direction_lines).strip()
+
+    if not user_direction:
+        await update.message.reply_text("Please include a direction, not just a URL.")
+        return
+
     db = get_db()
     row = db.execute(
         "SELECT topic, status, content_pillar, content_type FROM content_queue WHERE id = ?",
@@ -377,15 +431,22 @@ async def _handle_directed_regen(update: Update, context: ContextTypes.DEFAULT_T
         await update.message.reply_text(f"Post {post_id} is no longer pending approval.")
         return
 
-    await update.message.reply_text(f"Generating image for: {user_direction}\nThis may take a moment...")
-    log.info(f"Post {post_id} — directed regen: '{user_direction}'")
+    ref_note = f"\n(with reference image)" if reference_url else ""
+    await update.message.reply_text(f"Generating image for: {user_direction}{ref_note}\nThis may take a moment...")
+    log.info(f"Post {post_id} — directed regen: '{user_direction}' ref={reference_url}")
 
     # Generate image from user direction
-    from tools.content_guide import build_image_prompt
+    from tools.content_guide import build_image_prompt, build_reference_edit_prompt
     from tools.image_gen import generate_one
 
-    prompt = build_image_prompt.invoke(user_direction)
-    new_url = generate_one(prompt)
+    # With a reference image, use a minimal prompt so the reference drives the
+    # visual style. Wrapping with the full brand template would force the
+    # reference to be overridden and produce off-target results.
+    if reference_url:
+        prompt = build_reference_edit_prompt(user_direction)
+    else:
+        prompt = build_image_prompt.invoke(user_direction)
+    new_url = generate_one(prompt, reference_url=reference_url, content_type=row["content_type"] or "photo")
 
     # Generate matching caption via LLM
     new_caption = _generate_caption(user_direction, row["content_pillar"])
@@ -412,6 +473,56 @@ async def _handle_directed_regen(update: Update, context: ContextTypes.DEFAULT_T
         reply_markup=_build_review_keyboard(post_id),
     )
     log.info(f"Post {post_id} — directed regen complete: {new_url}")
+
+
+async def _handle_refine(update: Update, context: ContextTypes.DEFAULT_TYPE, post_id: int):
+    """Process an iterative refine: use the current image as the reference
+    and apply a short edit instruction. Caption is left untouched."""
+    direction = update.message.text.strip()
+    if not direction:
+        await update.message.reply_text("Please describe the change you want.")
+        return
+
+    db = get_db()
+    row = db.execute(
+        "SELECT topic, status, image_url, caption, content_type FROM content_queue WHERE id = ?",
+        (post_id,),
+    ).fetchone()
+
+    if not row or row["status"] != "pending_approval":
+        await update.message.reply_text(f"Post {post_id} is no longer pending approval.")
+        return
+    if not row["image_url"]:
+        await update.message.reply_text(f"Post {post_id} has no image to refine.")
+        return
+
+    await update.message.reply_text(f"Refining image: {direction}\nThis may take a moment...")
+    log.info(f"Post {post_id} — refine: '{direction}' ref={row['image_url']}")
+
+    from tools.content_guide import build_reference_edit_prompt
+    from tools.image_gen import generate_one
+
+    prompt = build_reference_edit_prompt(direction)
+    new_url = generate_one(prompt, reference_url=row["image_url"], content_type=row["content_type"] or "photo")
+
+    db.execute("UPDATE content_queue SET image_url = ? WHERE id = ?", (new_url, post_id))
+    db.commit()
+
+    review_text = (
+        f"POST #{post_id} — REFINED\n\n"
+        f"Change: {direction}\n\n"
+        f"--- Caption (unchanged) ---\n"
+        f"{row['caption']}\n"
+        f"---------------------------"
+    )
+
+    await context.bot.send_photo(
+        chat_id=update.message.chat_id,
+        photo=new_url,
+        caption=review_text[:1024],
+        reply_markup=_build_review_keyboard(post_id),
+    )
+    log.info(f"Post {post_id} — refine complete: {new_url}")
 
 
 # ── Caption Generation ──────────────────────────────────────────────
@@ -469,9 +580,10 @@ def _build_review_keyboard(post_id: int) -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton("Regen + Direction", callback_data=f"directregen_{post_id}"),
-            InlineKeyboardButton("Edit Caption", callback_data=f"editcap_{post_id}"),
+            InlineKeyboardButton("Refine Image", callback_data=f"refine_{post_id}"),
         ],
         [
+            InlineKeyboardButton("Edit Caption", callback_data=f"editcap_{post_id}"),
             InlineKeyboardButton("Reject", callback_data=f"reject_{post_id}"),
         ],
     ])

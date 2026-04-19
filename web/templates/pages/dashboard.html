@@ -1,112 +1,616 @@
 {% extends "base.html" %}
 {% block title %}Overview{% endblock %}
 
+{% block head %}
+<style>
+    .overview-shell {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+    }
+
+    .overview-hero,
+    .overview-panel,
+    .overview-reco {
+        position: relative;
+        background: linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(255,255,255,0.88) 100%);
+        border: 1px solid rgba(26,26,24,0.08);
+        border-radius: 28px;
+        box-shadow: 0 20px 48px rgba(26,26,24,0.08);
+        overflow: hidden;
+    }
+
+    .overview-hero::before,
+    .overview-panel::before,
+    .overview-reco::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+            radial-gradient(circle at top right, rgba(143,168,120,0.14), transparent 32%),
+            radial-gradient(circle at bottom left, rgba(212,168,67,0.12), transparent 28%);
+        pointer-events: none;
+    }
+
+    .overview-hero-inner,
+    .overview-panel-inner,
+    .overview-reco-inner {
+        position: relative;
+        padding: 26px;
+    }
+
+    .overview-hero-inner {
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.8fr);
+        gap: 22px;
+        align-items: start;
+    }
+
+    .overview-kicker {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+        color: rgba(26,26,24,0.44);
+        margin-bottom: 10px;
+    }
+
+    .overview-title {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: clamp(30px, 4vw, 42px);
+        line-height: 1.02;
+        letter-spacing: -0.04em;
+        color: var(--dark);
+    }
+
+    .overview-lead {
+        max-width: 640px;
+        margin: 12px 0 0;
+        font-size: 14px;
+        line-height: 1.78;
+        color: rgba(26,26,24,0.66);
+    }
+
+    .overview-hero-notes {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 20px;
+    }
+
+    .overview-hero-note {
+        display: inline-flex;
+        align-items: center;
+        padding: 7px 12px;
+        border-radius: 999px;
+        border: 1px solid rgba(26,26,24,0.08);
+        background: rgba(250,247,242,0.86);
+        font-size: 11px;
+        color: rgba(26,26,24,0.68);
+    }
+
+    .overview-signal-card {
+        padding: 20px;
+        border-radius: 24px;
+        background: linear-gradient(145deg, rgba(26,26,24,0.98), rgba(42,42,38,0.96));
+        color: rgba(250,247,242,0.86);
+        box-shadow: 0 24px 40px rgba(26,26,24,0.16);
+    }
+
+    .overview-signal-card .overview-kicker {
+        color: rgba(250,247,242,0.5);
+    }
+
+    .overview-signal-value {
+        display: block;
+        margin-top: 10px;
+        font-size: clamp(42px, 6vw, 58px);
+        line-height: 0.95;
+        font-weight: 600;
+        color: var(--cream);
+    }
+
+    .overview-signal-copy {
+        margin: 12px 0 18px;
+        font-size: 14px;
+        line-height: 1.7;
+        color: rgba(250,247,242,0.68);
+    }
+
+    .overview-signal-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding-top: 12px;
+        border-top: 1px solid rgba(250,247,242,0.12);
+        font-size: 12px;
+        color: rgba(250,247,242,0.72);
+    }
+
+    .overview-metric-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 16px;
+    }
+
+    .overview-metric-card {
+        position: relative;
+        padding: 20px;
+        border-radius: 24px;
+        border: 1px solid rgba(26,26,24,0.08);
+        background: linear-gradient(180deg, rgba(250,247,242,0.78) 0%, rgba(255,255,255,0.94) 100%);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.8);
+    }
+
+    .overview-metric-label {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: rgba(26,26,24,0.44);
+        margin-bottom: 18px;
+    }
+
+    .overview-metric-value {
+        display: block;
+        font-family: var(--font-serif);
+        font-size: clamp(30px, 4vw, 40px);
+        line-height: 0.98;
+        letter-spacing: -0.04em;
+        color: var(--dark);
+    }
+
+    .overview-metric-link {
+        display: block;
+        text-decoration: none;
+        color: inherit;
+    }
+
+    .overview-metric-note {
+        margin-top: 10px;
+        font-size: 13px;
+        line-height: 1.6;
+        color: rgba(26,26,24,0.6);
+    }
+
+    .overview-panel-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+        margin-bottom: 18px;
+    }
+
+    .overview-panel-title {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 28px;
+        line-height: 1.08;
+        letter-spacing: -0.03em;
+        color: var(--dark);
+    }
+
+    .overview-panel-text {
+        margin: 6px 0 0;
+        font-size: 14px;
+        line-height: 1.7;
+        color: rgba(26,26,24,0.6);
+    }
+
+    .overview-panel-tag {
+        display: inline-flex;
+        align-items: center;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(250,247,242,0.88);
+        border: 1px solid rgba(26,26,24,0.08);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: rgba(26,26,24,0.64);
+        white-space: nowrap;
+    }
+
+    .overview-pipeline {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 18px;
+        min-height: 46px;
+        align-items: stretch;
+    }
+
+    .overview-pipeline-segment {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 60px;
+        border-radius: 16px;
+        padding: 10px 12px;
+        color: #fff;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.2;
+        text-align: center;
+        box-shadow: 0 14px 24px rgba(26,26,24,0.1);
+    }
+
+    .overview-pipeline-legend {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .overview-pipeline-item {
+        padding: 12px 14px;
+        border-radius: 18px;
+        border: 1px solid rgba(26,26,24,0.08);
+        background: rgba(250,247,242,0.8);
+    }
+
+    .overview-pipeline-item strong {
+        display: block;
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--dark);
+        margin-bottom: 2px;
+    }
+
+    .overview-pipeline-item span {
+        font-size: 11px;
+        color: rgba(26,26,24,0.56);
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+    }
+
+    .overview-two-col {
+        display: grid;
+        grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+        gap: 18px;
+    }
+
+    .overview-actions {
+        display: grid;
+        gap: 10px;
+    }
+
+    .overview-run-list {
+        display: grid;
+        gap: 10px;
+    }
+
+    .overview-run-item {
+        border: 1px solid rgba(26,26,24,0.08);
+        border-radius: 18px;
+        background: rgba(250,247,242,0.72);
+        overflow: hidden;
+    }
+
+    .overview-run-summary {
+        display: grid;
+        grid-template-columns: minmax(120px, 1fr) minmax(0, 1.2fr) auto auto;
+        gap: 12px;
+        align-items: center;
+        padding: 14px 16px;
+    }
+
+    .overview-run-time,
+    .overview-run-duration {
+        font-size: 12px;
+        color: rgba(26,26,24,0.58);
+    }
+
+    .overview-run-task {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--dark);
+    }
+
+    .overview-run-detail {
+        padding: 0 16px 16px;
+        font-size: 13px;
+        line-height: 1.7;
+        color: rgba(26,26,24,0.68);
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    .overview-action-btn {
+        width: 100%;
+        justify-content: space-between;
+        padding: 14px 16px;
+        border-radius: 16px;
+    }
+
+    .overview-action-copy {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+        text-align: left;
+    }
+
+    .overview-action-copy strong {
+        font-size: 14px;
+        line-height: 1.3;
+    }
+
+    .overview-action-copy span {
+        font-size: 12px;
+        font-weight: 400;
+        opacity: 0.78;
+    }
+
+    .overview-action-arrow {
+        font-size: 16px;
+        line-height: 1;
+        opacity: 0.9;
+    }
+
+    .overview-failure {
+        margin-top: 14px;
+        padding: 12px 14px;
+        border-radius: 16px;
+        background: rgba(184,91,91,0.08);
+        border: 1px solid rgba(184,91,91,0.14);
+        color: var(--status-rejected);
+        font-size: 13px;
+        line-height: 1.6;
+    }
+
+    .overview-reco {
+        border-color: rgba(74,93,58,0.12);
+    }
+
+    .overview-reco-meta {
+        margin-top: 10px;
+        font-size: 12px;
+        color: rgba(26,26,24,0.5);
+    }
+
+    .overview-reco-copy {
+        margin-top: 14px;
+        font-size: 14px;
+        line-height: 1.8;
+        color: rgba(26,26,24,0.82);
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    @media (max-width: 1100px) {
+        .overview-hero-inner,
+        .overview-two-col {
+            grid-template-columns: 1fr;
+        }
+
+        .overview-metric-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .overview-pipeline-legend {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 720px) {
+        .overview-hero-inner,
+        .overview-panel-inner,
+        .overview-reco-inner {
+            padding: 20px;
+        }
+
+        .overview-metric-grid,
+        .overview-pipeline-legend {
+            grid-template-columns: 1fr;
+        }
+
+        .overview-panel-head {
+            flex-direction: column;
+        }
+
+        .overview-pipeline {
+            flex-direction: column;
+        }
+
+        .overview-run-summary {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<h1 class="page-title">Overview</h1>
+{% set pipeline_total = pipeline.values() | sum %}
+<div class="overview-shell">
+    <section class="overview-hero">
+        <div class="overview-hero-inner">
+            <div>
+                <div class="overview-kicker">Overview</div>
+                <h1 class="overview-title">A clearer pulse on content, growth, and the next action to take.</h1>
+                <p class="overview-lead">This dashboard should feel like a calm editorial command center: what is moving through the pipeline, what is performing, and what should happen next.</p>
 
-<!-- KPI Cards -->
-<div class="card-grid card-grid-4 mb-6">
-    <div class="kpi-card">
-        <div class="kpi-label">Followers</div>
-        <div class="kpi-value">{{ analytics.get('follower_count', 0) or 0 }}</div>
-    </div>
-    <div class="kpi-card">
-        <div class="kpi-label">Published This Week</div>
-        <div class="kpi-value">{{ published_week }}</div>
-    </div>
-    <div class="kpi-card">
-        <div class="kpi-label">Avg Engagement</div>
-        <div class="kpi-value">{{ "%.1f" | format(analytics.get('avg_engagement_rate', 0) or 0) }}%</div>
-    </div>
-    <div class="kpi-card">
-        <a href="/queue?status=pending_approval" style="text-decoration:none;color:inherit">
-            <div class="kpi-label">Pending Approval</div>
-            <div class="kpi-value" style="color: var(--status-pending)">{{ pipeline.get('pending_approval', 0) }}</div>
-        </a>
-    </div>
-</div>
-
-<!-- Content Pipeline -->
-<div class="section-label">Content Pipeline</div>
-<div class="card mb-6">
-    {% set total = pipeline.values() | sum or 1 %}
-    <div class="pipeline">
-        {% for status, color in [('draft', '#D4A843'), ('pending_approval', '#5B8DB8'), ('approved', '#8FA878'), ('published', '#4A5D3A')] %}
-        {% set count = pipeline.get(status, 0) %}
-        {% if count > 0 %}
-        <div class="pipeline-segment" style="background: {{ color }}; flex: {{ count }}">
-            {{ status.replace('_', ' ').title() }} ({{ count }})
-        </div>
-        {% endif %}
-        {% endfor %}
-        {% if pipeline.get('rejected', 0) > 0 %}
-        <div class="pipeline-segment" style="background: #B85B5B; flex: {{ pipeline.get('rejected', 0) }}">
-            Rejected ({{ pipeline.get('rejected', 0) }})
-        </div>
-        {% endif %}
-    </div>
-    {% if total <= 1 and not pipeline %}
-    <div class="empty-state" style="padding: 16px">
-        <div class="empty-state-text">No content in pipeline yet</div>
-    </div>
-    {% endif %}
-</div>
-
-<div class="card-grid card-grid-2 mb-6">
-    <!-- Recent Activity -->
-    <div>
-        <div class="section-label">Recent Activity</div>
-        <div class="card" id="recent-activity"
-             hx-get="/partials/recent-runs"
-             hx-trigger="every 60s"
-             hx-swap="innerHTML">
-            {% include "components/recent_runs.html" %}
-        </div>
-    </div>
-
-    <!-- Quick Actions -->
-    <div>
-        <div class="section-label">Quick Actions</div>
-        <div class="card">
-            <div class="quick-actions" style="flex-direction: column; gap: 8px;">
-                <button class="btn btn-primary"
-                        hx-post="/schedule/content_planning/run"
-                        hx-swap="outerHTML"
-                        hx-confirm="Run content planning now?">
-                    Run Content Planning
-                </button>
-                <button class="btn btn-primary"
-                        hx-post="/schedule/image_generation/run"
-                        hx-swap="outerHTML"
-                        hx-confirm="Run image generation now?">
-                    Run Image Generation
-                </button>
-                <button class="btn btn-primary"
-                        hx-post="/schedule/analytics/run"
-                        hx-swap="outerHTML"
-                        hx-confirm="Run analytics now?">
-                    Run Analytics
-                </button>
-                <button class="btn btn-secondary"
-                        hx-post="/schedule/publish/run"
-                        hx-swap="outerHTML"
-                        hx-confirm="Run publish now?">
-                    Publish Ready Posts
-                </button>
+                <div class="overview-hero-notes">
+                    <span class="overview-hero-note">Followers: {{ analytics.get('follower_count', 0) or 0 }}</span>
+                    <span class="overview-hero-note">Published this week: {{ published_week }}</span>
+                    <span class="overview-hero-note">Pending review: {{ pipeline.get('pending_approval', 0) }}</span>
+                </div>
             </div>
-            {% if fail_stats.failures and fail_stats.failures > 0 %}
-            <div class="mt-4 text-sm" style="color: var(--status-rejected)">
-                {{ fail_stats.failures }} failed run{{ 's' if fail_stats.failures != 1 }} in the last 7 days
+
+            <div class="overview-signal-card">
+                <div class="overview-kicker">Engagement Signal</div>
+                <span class="overview-signal-value">{{ "%.1f" | format(analytics.get('avg_engagement_rate', 0) or 0) }}%</span>
+                <p class="overview-signal-copy">Current average engagement rate based on the latest analytics snapshot.</p>
+                <div class="overview-signal-row">
+                    <span>Reach {{ "{:,}".format(analytics.get('total_reach', 0) or 0) }}</span>
+                    <span>Impressions {{ "{:,}".format(analytics.get('total_impressions', 0) or 0) }}</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="overview-metric-grid">
+        <div class="overview-metric-card">
+            <div class="overview-metric-label">Followers</div>
+            <span class="overview-metric-value">{{ analytics.get('follower_count', 0) or 0 }}</span>
+            <div class="overview-metric-note">Latest audience size from analytics snapshots.</div>
+        </div>
+
+        <div class="overview-metric-card">
+            <div class="overview-metric-label">Published This Week</div>
+            <span class="overview-metric-value">{{ published_week }}</span>
+            <div class="overview-metric-note">Posts that made it live over the last 7 days.</div>
+        </div>
+
+        <div class="overview-metric-card">
+            <div class="overview-metric-label">Avg Engagement</div>
+            <span class="overview-metric-value">{{ "%.1f" | format(analytics.get('avg_engagement_rate', 0) or 0) }}%</span>
+            <div class="overview-metric-note">Current engagement benchmark across recent content.</div>
+        </div>
+
+        <div class="overview-metric-card">
+            <a href="/queue?status=pending_approval" class="overview-metric-link">
+                <div class="overview-metric-label">Pending Approval</div>
+                <span class="overview-metric-value" style="color: var(--status-pending)">{{ pipeline.get('pending_approval', 0) }}</span>
+                <div class="overview-metric-note">Posts waiting for editorial review.</div>
+            </a>
+        </div>
+    </section>
+
+    <section class="overview-panel">
+        <div class="overview-panel-inner">
+            <div class="overview-panel-head">
+                <div>
+                    <div class="overview-kicker">Content Pipeline</div>
+                    <h2 class="overview-panel-title">See where the queue is gathering momentum.</h2>
+                    <p class="overview-panel-text">A quick read on which workflow stages are full, stalled, or already shipping.</p>
+                </div>
+                <div class="overview-panel-tag">{{ pipeline_total or 0 }} total items</div>
+            </div>
+
+            {% if pipeline_total > 0 %}
+            <div class="overview-pipeline">
+                {% for status, color in [('draft', '#D4A843'), ('pending_approval', '#5B8DB8'), ('approved', '#8FA878'), ('published', '#4A5D3A'), ('rejected', '#B85B5B')] %}
+                {% set count = pipeline.get(status, 0) %}
+                {% if count > 0 %}
+                <div class="overview-pipeline-segment" style="background: {{ color }}; flex: {{ count }}">
+                    {{ status.replace('_', ' ').title() }} · {{ count }}
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+
+            <div class="overview-pipeline-legend">
+                {% for status in ['draft', 'pending_approval', 'approved', 'published', 'rejected'] %}
+                <div class="overview-pipeline-item">
+                    <strong>{{ pipeline.get(status, 0) }}</strong>
+                    <span>{{ status.replace('_', ' ') }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state" style="padding: 18px 0 0;">
+                <div class="empty-state-text">No content in pipeline yet.</div>
             </div>
             {% endif %}
         </div>
-    </div>
-</div>
+    </section>
 
-{% if analytics.get('recommendations') %}
-<div class="section-label">AI Recommendations</div>
-<div class="reco-card mb-6">
-    <div class="pre-wrap text-sm">{{ analytics.get('recommendations', '') }}</div>
+    <section class="overview-two-col">
+        <div class="overview-panel">
+            <div class="overview-panel-inner">
+                <div class="overview-panel-head">
+                    <div>
+                        <div class="overview-kicker">Recent Activity</div>
+                        <h2 class="overview-panel-title">Latest runs and background activity.</h2>
+                        <p class="overview-panel-text">Refreshed automatically so the dashboard stays current.</p>
+                    </div>
+                    <div class="overview-panel-tag">Auto-refresh 60s</div>
+                </div>
+
+                <div id="recent-activity"
+                     hx-get="/partials/recent-runs"
+                     hx-trigger="every 60s"
+                     hx-swap="innerHTML">
+                    {% include "components/recent_runs.html" %}
+                </div>
+            </div>
+        </div>
+
+        <div class="overview-panel">
+            <div class="overview-panel-inner">
+                <div class="overview-panel-head">
+                    <div>
+                        <div class="overview-kicker">Quick Actions</div>
+                        <h2 class="overview-panel-title">Trigger the next workflow step.</h2>
+                        <p class="overview-panel-text">Useful when you want to nudge the system without leaving the overview.</p>
+                    </div>
+                </div>
+
+                <div class="overview-actions">
+                    <button class="btn btn-primary overview-action-btn"
+                            hx-post="/schedule/content_planning/run"
+                            hx-swap="outerHTML"
+                            hx-confirm="Run content planning now?">
+                        <span class="overview-action-copy">
+                            <strong>Run Content Planning</strong>
+                            <span>Generate the next batch of planned content.</span>
+                        </span>
+                        <span class="overview-action-arrow">&rarr;</span>
+                    </button>
+
+                    <button class="btn btn-primary overview-action-btn"
+                            hx-post="/schedule/image_generation/run"
+                            hx-swap="outerHTML"
+                            hx-confirm="Run image generation now?">
+                        <span class="overview-action-copy">
+                            <strong>Run Image Generation</strong>
+                            <span>Create visuals for queued drafts and replacements.</span>
+                        </span>
+                        <span class="overview-action-arrow">&rarr;</span>
+                    </button>
+
+                    <button class="btn btn-primary overview-action-btn"
+                            hx-post="/schedule/analytics/run"
+                            hx-swap="outerHTML"
+                            hx-confirm="Run analytics now?">
+                        <span class="overview-action-copy">
+                            <strong>Run Analytics</strong>
+                            <span>Refresh performance signals and recommendations.</span>
+                        </span>
+                        <span class="overview-action-arrow">&rarr;</span>
+                    </button>
+
+                    <button class="btn btn-secondary overview-action-btn"
+                            hx-post="/schedule/publish/run"
+                            hx-swap="outerHTML"
+                            hx-confirm="Run publish now?">
+                        <span class="overview-action-copy">
+                            <strong>Publish Ready Posts</strong>
+                            <span>Push approved content that is ready to go live.</span>
+                        </span>
+                        <span class="overview-action-arrow">&rarr;</span>
+                    </button>
+                </div>
+
+                {% if fail_stats.failures and fail_stats.failures > 0 %}
+                <div class="overview-failure">
+                    {{ fail_stats.failures }} failed run{{ 's' if fail_stats.failures != 1 }} recorded in the last 7 days.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </section>
+
+    {% if analytics.get('recommendations') %}
+    <section class="overview-reco">
+        <div class="overview-reco-inner">
+            <div class="overview-kicker">AI Recommendations</div>
+            <h2 class="overview-panel-title">Suggested focus for the coming week.</h2>
+            <div class="overview-reco-meta">Generated from the latest analytics snapshot.</div>
+            <div class="overview-reco-copy">{{ analytics.get('recommendations', '') }}</div>
+        </div>
+    </section>
+    {% endif %}
 </div>
-{% endif %}
 {% endblock %}

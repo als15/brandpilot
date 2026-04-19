@@ -1,16 +1,16 @@
-<div class="stat-pill">
-    <span class="stat-label">Followers</span>
-    <span class="stat-value">{{ stats.followers or '—' }}</span>
+<div class="flex items-center gap-1.5">
+    <span class="text-[11px] font-medium uppercase tracking-[1.5px] opacity-50">Followers</span>
+    <span class="text-sm font-semibold">{{ stats.followers or '—' }}</span>
 </div>
-<div class="stat-pill pending">
-    <span class="stat-label">Pending</span>
-    <span class="stat-value">{{ stats.pending_count or 0 }}</span>
+<div class="flex items-center gap-1.5">
+    <span class="text-[11px] font-medium uppercase tracking-[1.5px] opacity-50">Pending</span>
+    <span class="text-sm font-semibold text-info">{{ stats.pending_count or 0 }}</span>
 </div>
-<div class="stat-pill">
-    <span class="stat-label">Approved</span>
-    <span class="stat-value">{{ stats.approved_count or 0 }}</span>
+<div class="flex items-center gap-1.5">
+    <span class="text-[11px] font-medium uppercase tracking-[1.5px] opacity-50">Approved</span>
+    <span class="text-sm font-semibold">{{ stats.approved_count or 0 }}</span>
 </div>
-<div class="stat-pill">
-    <span class="stat-label">Last Run</span>
-    <span class="stat-value">{{ stats.last_run_short or '—' }}</span>
+<div class="flex items-center gap-1.5">
+    <span class="text-[11px] font-medium uppercase tracking-[1.5px] opacity-50">Last Run</span>
+    <span class="text-sm font-semibold">{{ stats.last_run_short or '—' }}</span>
 </div>

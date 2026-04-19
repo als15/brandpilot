@@ -1,83 +1,511 @@
 {% extends "base.html" %}
 {% block title %}System{% endblock %}
 
+{% block head %}
+<style>
+    .system-shell {
+        display: grid;
+        gap: 26px;
+    }
+
+    .system-hero {
+        position: relative;
+        overflow: hidden;
+        border-radius: 28px;
+        padding: 28px;
+        background:
+            radial-gradient(circle at top right, rgba(91, 141, 184, 0.22), transparent 34%),
+            linear-gradient(135deg, #161b1a 0%, #283330 52%, #ede7dc 160%);
+        color: #f4efe7;
+        box-shadow: 0 24px 70px rgba(22, 27, 26, 0.26);
+    }
+
+    .system-hero-grid {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.95fr);
+        gap: 24px;
+        align-items: end;
+    }
+
+    .system-kicker,
+    .system-section-label {
+        margin: 0 0 10px;
+        font-size: 11px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+    }
+
+    .system-kicker {
+        color: rgba(244, 239, 231, 0.68);
+    }
+
+    .system-title {
+        margin: 0;
+        max-width: 11ch;
+        font-family: var(--font-serif);
+        font-size: clamp(38px, 5vw, 60px);
+        line-height: 0.96;
+    }
+
+    .system-intro {
+        max-width: 58ch;
+        margin: 14px 0 0;
+        font-size: 15px;
+        line-height: 1.7;
+        color: rgba(244, 239, 231, 0.8);
+    }
+
+    .system-metrics {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 22px;
+    }
+
+    .system-metric {
+        padding: 14px 16px;
+        border-radius: 18px;
+        border: 1px solid rgba(244, 239, 231, 0.1);
+        background: rgba(244, 239, 231, 0.08);
+    }
+
+    .system-metric-label {
+        display: block;
+        font-size: 10px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: rgba(244, 239, 231, 0.6);
+    }
+
+    .system-metric-value {
+        display: block;
+        margin-top: 7px;
+        font-size: 28px;
+        font-weight: 700;
+        line-height: 1;
+    }
+
+    .system-metric-note {
+        display: block;
+        margin-top: 7px;
+        font-size: 12px;
+        color: rgba(244, 239, 231, 0.72);
+    }
+
+    .system-focus {
+        padding: 22px;
+        border-radius: 22px;
+        background: rgba(15, 18, 18, 0.44);
+        border: 1px solid rgba(244, 239, 231, 0.1);
+    }
+
+    .system-focus-title {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 30px;
+        line-height: 1.08;
+    }
+
+    .system-focus-copy {
+        margin: 12px 0 0;
+        font-size: 14px;
+        line-height: 1.7;
+        color: rgba(244, 239, 231, 0.76);
+    }
+
+    .system-focus-list {
+        display: grid;
+        gap: 10px;
+        margin: 18px 0 0;
+        padding: 0;
+        list-style: none;
+    }
+
+    .system-focus-list li {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        padding-top: 10px;
+        border-top: 1px solid rgba(244, 239, 231, 0.08);
+        font-size: 13px;
+    }
+
+    .system-control-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.55fr) minmax(280px, 0.95fr);
+        gap: 24px;
+        align-items: start;
+    }
+
+    .system-panel {
+        border-radius: 26px;
+        padding: 24px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), #f6f1e8);
+        border: 1px solid rgba(26, 26, 24, 0.06);
+        box-shadow: 0 18px 50px rgba(43, 48, 37, 0.08);
+    }
+
+    .system-panel-dark {
+        background:
+            radial-gradient(circle at top left, rgba(91, 141, 184, 0.18), transparent 34%),
+            linear-gradient(180deg, #242928 0%, #151817 100%);
+        color: #f4efe7;
+    }
+
+    .system-panel-dark .system-section-label {
+        color: rgba(244, 239, 231, 0.62);
+    }
+
+    .system-section-label {
+        color: var(--gray-text);
+    }
+
+    .system-section-title {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 28px;
+        line-height: 1.08;
+    }
+
+    .system-section-copy {
+        margin: 10px 0 0;
+        font-size: 14px;
+        line-height: 1.7;
+        color: var(--gray-text);
+    }
+
+    .system-panel-dark .system-section-copy {
+        color: rgba(244, 239, 231, 0.74);
+    }
+
+    .system-info-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+        margin-top: 22px;
+    }
+
+    .system-info-card {
+        padding: 18px;
+        border-radius: 22px;
+        background: #fffdf9;
+        border: 1px solid rgba(26, 26, 24, 0.06);
+    }
+
+    .system-info-list {
+        display: grid;
+        gap: 12px;
+        margin-top: 14px;
+    }
+
+    .system-info-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid rgba(26, 26, 24, 0.06);
+        font-size: 13px;
+    }
+
+    .system-info-row:last-child {
+        padding-bottom: 0;
+        border-bottom: 0;
+    }
+
+    .system-info-key {
+        color: var(--gray-text);
+    }
+
+    .system-info-value {
+        font-weight: 600;
+        text-align: right;
+    }
+
+    .system-info-value.is-warning {
+        color: #8e3f3f;
+    }
+
+    .system-count-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+        margin-top: 22px;
+    }
+
+    .system-count-card {
+        padding: 16px;
+        border-radius: 20px;
+        background: rgba(244, 239, 231, 0.06);
+        border: 1px solid rgba(244, 239, 231, 0.08);
+    }
+
+    .system-count-card strong {
+        display: block;
+        font-size: 26px;
+        line-height: 1;
+        margin: 8px 0 4px;
+    }
+
+    .system-count-card span {
+        display: block;
+        font-size: 11px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: rgba(244, 239, 231, 0.62);
+    }
+
+    .system-count-card p {
+        margin: 0;
+        font-size: 12px;
+        color: rgba(244, 239, 231, 0.72);
+    }
+
+    .system-job-list {
+        display: grid;
+        gap: 12px;
+        margin-top: 20px;
+    }
+
+    .system-job {
+        padding: 14px 16px;
+        border-radius: 18px;
+        background: rgba(244, 239, 231, 0.05);
+        border: 1px solid rgba(244, 239, 231, 0.08);
+    }
+
+    .system-job-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        align-items: baseline;
+    }
+
+    .system-job-id {
+        font-size: 14px;
+        font-weight: 700;
+    }
+
+    .system-job-time {
+        font-size: 12px;
+        color: rgba(244, 239, 231, 0.74);
+    }
+
+    .system-job-trigger {
+        margin-top: 8px;
+        font-size: 12px;
+        line-height: 1.5;
+        color: rgba(244, 239, 231, 0.62);
+        word-break: break-word;
+    }
+
+    .system-log-panel {
+        border-radius: 26px;
+        padding: 24px;
+        background: #121614;
+        color: #d8d1c5;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+
+    .system-log-box {
+        margin-top: 18px;
+        padding: 16px;
+        border-radius: 18px;
+        background: #0b0e0d;
+        border: 1px solid rgba(244, 239, 231, 0.08);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 12px;
+        line-height: 1.6;
+        max-height: 420px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    @media (max-width: 1100px) {
+        .system-hero-grid,
+        .system-control-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 780px) {
+        .system-hero,
+        .system-panel,
+        .system-log-panel {
+            padding: 20px;
+            border-radius: 22px;
+        }
+
+        .system-metrics,
+        .system-info-grid,
+        .system-count-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .system-job-top,
+        .system-info-row {
+            flex-direction: column;
+            align-items: start;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<h1 class="page-title">System</h1>
+{% set total_rows = counts.get('content_count', 0) + counts.get('leads_count', 0) + counts.get('engagement_count', 0) + counts.get('run_count', 0) + counts.get('snapshot_count', 0) + counts.get('perf_count', 0) %}
+<div class="system-shell">
+    <section class="system-hero">
+        <div class="system-hero-grid">
+            <div>
+                <p class="system-kicker">Infrastructure overview</p>
+                <h1 class="system-title">See the machine room without digging.</h1>
+                <p class="system-intro">
+                    Core environment, token health, scheduler state, and recent daemon output are collected here so operational issues show up early.
+                </p>
+                <div class="system-metrics">
+                    <div class="system-metric">
+                        <span class="system-metric-label">Database</span>
+                        <span class="system-metric-value">{{ sys_info.db_type }}</span>
+                        <span class="system-metric-note">Primary persistence layer</span>
+                    </div>
+                    <div class="system-metric">
+                        <span class="system-metric-label">Tracked rows</span>
+                        <span class="system-metric-value">{{ total_rows }}</span>
+                        <span class="system-metric-note">Across all monitored tables</span>
+                    </div>
+                    <div class="system-metric">
+                        <span class="system-metric-label">Scheduled jobs</span>
+                        <span class="system-metric-value">{{ scheduler_jobs|length }}</span>
+                        <span class="system-metric-note">Visible from the active scheduler</span>
+                    </div>
+                </div>
+            </div>
 
-<div class="card-grid card-grid-2 mb-6">
-    <!-- System Info -->
-    <div class="card">
-        <div class="section-label mb-4">System Info</div>
-        <div class="info-grid">
-            <span class="info-label">Database</span>
-            <span>{{ sys_info.db_type }}</span>
-            <span class="info-label">LLM Provider</span>
-            <span>{{ sys_info.llm_provider }}</span>
-            <span class="info-label">Timezone</span>
-            <span>{{ sys_info.timezone }}</span>
+            <aside class="system-focus">
+                <p class="system-kicker">Focus signal</p>
+                <h2 class="system-focus-title">
+                    {% if token_info and token_info.days_remaining < 10 %}
+                        Token refresh window is tight
+                    {% elif scheduler_jobs %}
+                        Scheduler heartbeat is visible
+                    {% else %}
+                        Runtime is mostly quiet
+                    {% endif %}
+                </h2>
+                <p class="system-focus-copy">
+                    Use this page for operational confidence checks, not just raw data lookup. The goal is to surface what needs attention first.
+                </p>
+                <ul class="system-focus-list">
+                    <li><span>LLM provider</span><strong>{{ sys_info.llm_provider }}</strong></li>
+                    <li><span>Timezone</span><strong>{{ sys_info.timezone }}</strong></li>
+                    <li><span>Token status</span><strong>{% if token_info %}{{ token_info.days_remaining }} days left{% else %}Missing{% endif %}</strong></li>
+                </ul>
+            </aside>
         </div>
-    </div>
+    </section>
 
-    <!-- Meta Token -->
-    <div class="card">
-        <div class="section-label mb-4">Meta API Token</div>
-        {% if token_info %}
-        <div class="info-grid">
-            <span class="info-label">Last Refresh</span>
-            <span>{{ token_info.last_refresh }}</span>
-            <span class="info-label">Days Since</span>
-            <span>{{ token_info.days_since }} days</span>
-            <span class="info-label">Days Remaining</span>
-            <span style="{% if token_info.days_remaining < 10 %}color:var(--status-rejected);font-weight:600{% endif %}">
-                ~{{ token_info.days_remaining }} days
-            </span>
+    <section class="system-control-grid">
+        <div class="system-panel">
+            <p class="system-section-label">Infrastructure cards</p>
+            <h2 class="system-section-title">Core configuration at a glance.</h2>
+            <p class="system-section-copy">
+                The page groups environment details and token state into two quick-read panels instead of making you scan key-value rows.
+            </p>
+
+            <div class="system-info-grid">
+                <article class="system-info-card">
+                    <p class="system-section-label">System info</p>
+                    <h3 class="system-section-title" style="font-size:22px;">Environment</h3>
+                    <div class="system-info-list">
+                        <div class="system-info-row">
+                            <span class="system-info-key">Database</span>
+                            <span class="system-info-value">{{ sys_info.db_type }}</span>
+                        </div>
+                        <div class="system-info-row">
+                            <span class="system-info-key">LLM provider</span>
+                            <span class="system-info-value">{{ sys_info.llm_provider }}</span>
+                        </div>
+                        <div class="system-info-row">
+                            <span class="system-info-key">Timezone</span>
+                            <span class="system-info-value">{{ sys_info.timezone }}</span>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="system-info-card">
+                    <p class="system-section-label">Meta API token</p>
+                    <h3 class="system-section-title" style="font-size:22px;">Refresh status</h3>
+                    {% if token_info %}
+                    <div class="system-info-list">
+                        <div class="system-info-row">
+                            <span class="system-info-key">Last refresh</span>
+                            <span class="system-info-value">{{ token_info.last_refresh }}</span>
+                        </div>
+                        <div class="system-info-row">
+                            <span class="system-info-key">Age</span>
+                            <span class="system-info-value">{{ token_info.days_since }} days</span>
+                        </div>
+                        <div class="system-info-row">
+                            <span class="system-info-key">Remaining</span>
+                            <span class="system-info-value {{ 'is-warning' if token_info.days_remaining < 10 else '' }}">~{{ token_info.days_remaining }} days</span>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="system-section-copy">No token file was found in `data/meta_token.txt`.</div>
+                    {% endif %}
+                </article>
+            </div>
         </div>
-        {% else %}
-        <div class="text-sm text-muted">No token file found</div>
-        {% endif %}
-    </div>
-</div>
 
-<!-- Table Sizes -->
-<div class="section-label">Database Tables</div>
-<div class="card-grid card-grid-3 mb-6">
-    {% for name, key in [('Content Queue', 'content_count'), ('Leads', 'leads_count'), ('Engagement Tasks', 'engagement_count'), ('Run Log', 'run_count'), ('Analytics Snapshots', 'snapshot_count'), ('Post Performance', 'perf_count')] %}
-    <div class="kpi-card">
-        <div class="kpi-label">{{ name }}</div>
-        <div class="kpi-value">{{ counts.get(key, 0) }}</div>
-        <div class="text-xs text-muted">rows</div>
-    </div>
-    {% endfor %}
-</div>
+        <aside class="system-panel system-panel-dark">
+            <p class="system-section-label">Database footprint</p>
+            <h2 class="system-section-title">Counts that actually matter.</h2>
+            <p class="system-section-copy">
+                The monitored tables are summarized as compact inventory cards so data volume trends are easier to parse.
+            </p>
 
-<!-- Scheduler Jobs -->
-{% if scheduler_jobs %}
-<div class="section-label">Scheduler Jobs</div>
-<div class="card mb-6">
-    <div class="table-wrap">
-        <table>
-            <thead>
-                <tr>
-                    <th>Job</th>
-                    <th>Trigger</th>
-                    <th>Next Run</th>
-                </tr>
-            </thead>
-            <tbody>
+            <div class="system-count-grid">
+                {% for name, key in [('Content Queue', 'content_count'), ('Leads', 'leads_count'), ('Engagement Tasks', 'engagement_count'), ('Run Log', 'run_count'), ('Analytics Snapshots', 'snapshot_count'), ('Post Performance', 'perf_count')] %}
+                <div class="system-count-card">
+                    <span>{{ name }}</span>
+                    <strong>{{ counts.get(key, 0) }}</strong>
+                    <p>rows</p>
+                </div>
+                {% endfor %}
+            </div>
+        </aside>
+    </section>
+
+    {% if scheduler_jobs %}
+    <section class="system-panel system-panel-dark">
+        <p class="system-section-label">Scheduler jobs</p>
+        <h2 class="system-section-title">Upcoming automation cadence.</h2>
+        <p class="system-section-copy">
+            Active jobs are shown as a list instead of a table so the next run and trigger pattern read faster.
+        </p>
+        <div class="system-job-list">
             {% for job in scheduler_jobs %}
-                <tr>
-                    <td class="text-sm" style="font-weight:500">{{ job.id }}</td>
-                    <td class="text-sm text-muted">{{ job.trigger }}</td>
-                    <td class="text-sm">{{ job.next_run }}</td>
-                </tr>
+            <article class="system-job">
+                <div class="system-job-top">
+                    <div class="system-job-id">{{ job.id }}</div>
+                    <div class="system-job-time">{{ job.next_run }}</div>
+                </div>
+                <div class="system-job-trigger">{{ job.trigger }}</div>
+            </article>
             {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
-{% endif %}
+        </div>
+    </section>
+    {% endif %}
 
-<!-- Daemon Log -->
-<div class="section-label">Daemon Log (last 50 lines)</div>
-<div class="log-viewer">{% for line in log_lines %}{{ line }}{% endfor %}{% if not log_lines %}(no log file found){% endif %}</div>
+    <section class="system-log-panel">
+        <p class="system-section-label" style="color: rgba(216, 209, 197, 0.62);">Daemon log</p>
+        <h2 class="system-section-title" style="font-size: 28px;">Recent runtime output.</h2>
+        <p class="system-section-copy" style="color: rgba(216, 209, 197, 0.7);">
+            Last 50 lines from the daemon process, formatted as a diagnostics console instead of a loose text block.
+        </p>
+        <div class="system-log-box">{% for line in log_lines %}{{ line }}{% endfor %}{% if not log_lines %}(no log file found){% endif %}</div>
+    </section>
+</div>
 {% endblock %}

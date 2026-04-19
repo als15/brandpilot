@@ -1,5 +1,7 @@
 """Leads management page."""
 
+from html import escape
+
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
@@ -8,6 +10,23 @@ from web.db import query, execute
 from web.brand_switcher import get_dashboard_brand, get_brand_context
 
 router = APIRouter()
+
+
+def _render_lead_status_control(lead_id: int, selected_status: str) -> HTMLResponse:
+    options = []
+    for status in ["discovered", "researched", "contacted", "converted"]:
+        selected = " selected" if status == selected_status else ""
+        options.append(f'<option value="{status}"{selected}>{status.replace("_", " ").title()}</option>')
+
+    return HTMLResponse(
+        f'<div class="leads-status-wrap" id="lead-status-{lead_id}">'
+        f'<form hx-post="/leads/{lead_id}/status" hx-target="#lead-status-{lead_id}" hx-swap="outerHTML">'
+        f'<select name="status" onchange="this.form.requestSubmit()" class="leads-status-select badge-{escape(selected_status)}">'
+        f'{"".join(options)}'
+        f'</select>'
+        f'</form>'
+        f'</div>'
+    )
 
 
 @router.get("/leads", response_class=HTMLResponse)
@@ -76,4 +95,4 @@ async def update_lead_status(request: Request, lead_id: int):
         "UPDATE leads SET status = ?, last_updated = CURRENT_TIMESTAMP WHERE id = ? AND brand_id = ?",
         (new_status, lead_id, brand_id),
     )
-    return HTMLResponse(f'<span class="badge badge-{new_status}">{new_status}</span>')
+    return _render_lead_status_control(lead_id, new_status)

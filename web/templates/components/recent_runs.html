@@ -1,29 +1,17 @@
 {% if recent_runs %}
-<table>
-    <thead>
-        <tr>
-            <th>Time</th>
-            <th>Task</th>
-            <th>Status</th>
-            <th>Duration</th>
-        </tr>
-    </thead>
-    <tbody>
+<div class="overview-run-list">
     {% for run in recent_runs %}
-        <tr class="run-row" onclick="this.classList.toggle('expanded')">
-            <td class="text-sm">{{ run.started_at | datefmt }}</td>
-            <td class="text-sm">{{ run.task_type }}</td>
-            <td><span class="badge badge-{{ run.status }}">{{ run.status }}</span></td>
-            <td class="text-sm text-muted">{{ "%.1f" | format(run.duration_seconds or 0) }}s</td>
-        </tr>
-        <tr class="run-detail">
-            <td colspan="4">{{ run.detail or '(no detail)' }}</td>
-        </tr>
+    <div class="overview-run-item">
+        <div class="overview-run-summary">
+            <div class="overview-run-time">{{ run.started_at | datefmt }}</div>
+            <div class="overview-run-task">{{ run.task_type }}</div>
+            <div><span class="badge badge-{{ run.status }}">{{ run.status }}</span></div>
+            <div class="overview-run-duration">{{ "%.1f" | format(run.duration_seconds or 0) }}s</div>
+        </div>
+        <div class="overview-run-detail">{{ run.detail or '(no detail)' }}</div>
+    </div>
     {% endfor %}
-    </tbody>
-</table>
-{% else %}
-<div class="empty-state">
-    <div class="empty-state-text">No runs recorded yet</div>
 </div>
+{% else %}
+<div class="text-center py-8 opacity-50 text-sm">No runs recorded yet</div>
 {% endif %}

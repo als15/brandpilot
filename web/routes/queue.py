@@ -6,6 +6,7 @@ import logging
 from collections import OrderedDict
 from datetime import date, timedelta
 from functools import partial
+from html import escape
 
 from fastapi import APIRouter, Request, BackgroundTasks, Form
 from fastapi.responses import HTMLResponse
@@ -18,6 +19,68 @@ router = APIRouter()
 log = logging.getLogger("capaco")
 
 DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+
+def _render_detail_edit_error(field_id: str, label: str, *, wide: bool = False) -> HTMLResponse:
+    block_classes = "queue-detail-block"
+    if wide:
+        block_classes += " queue-detail-block-wide"
+
+    return HTMLResponse(
+        f'<div class="{block_classes}" id="{field_id}">'
+        f'<div class="queue-detail-block-header">'
+        f'<div class="queue-detail-block-label">{label}</div>'
+        f'</div>'
+        f'<div class="queue-detail-value queue-detail-empty">Cannot edit.</div>'
+        f'</div>'
+    )
+
+
+def _render_editable_detail_block(
+    field_id: str,
+    label: str,
+    display_id: str,
+    form_id: str,
+    post_id: int,
+    action_path: str,
+    value_html: str,
+    form_controls_html: str,
+    *,
+    wide: bool = False,
+) -> HTMLResponse:
+    block_classes = "queue-detail-block"
+    if wide:
+        block_classes += " queue-detail-block-wide"
+
+    return HTMLResponse(
+        f'<div class="{block_classes}" id="{field_id}">'
+        f'<div class="queue-detail-block-header">'
+        f'<div class="queue-detail-block-label">{label}</div>'
+        f'<div style="display:flex;align-items:center;gap:8px;">'
+        f'<span class="queue-detail-note">Saved</span>'
+        f'<button class="btn btn-outline btn-xs queue-detail-edit" '
+        f'onclick="document.getElementById(\'{display_id}\').style.display=\'none\'; '
+        f'document.getElementById(\'{form_id}\').style.display=\'block\';">Edit</button>'
+        f'</div>'
+        f'</div>'
+        f'{value_html}'
+        f'<form id="{form_id}" class="queue-detail-form" '
+        f'hx-post="/queue/{post_id}/{action_path}" '
+        f'hx-target="#{field_id}" '
+        f'hx-swap="outerHTML" '
+        f'hx-disabled-elt="find button[type=\'submit\']">'
+        f'{form_controls_html}'
+        f'<div class="queue-detail-form-actions">'
+        f'<button type="submit" class="btn btn-primary btn-xs">'
+        f'<span class="loading loading-spinner loading-xs htmx-indicator"></span> Save'
+        f'</button>'
+        f'<button type="button" class="btn btn-outline btn-xs" '
+        f'onclick="document.getElementById(\'{display_id}\').style.display=\'\'; '
+        f'document.getElementById(\'{form_id}\').style.display=\'none\';">Cancel</button>'
+        f'</div>'
+        f'</form>'
+        f'</div>'
+    )
 
 
 @router.get("/queue", response_class=HTMLResponse)
@@ -194,6 +257,40 @@ async def reject_post(request: Request, post_id: int):
     return HTMLResponse('<span class="badge badge-rejected">Rejected</span>')
 
 
+@router.post("/queue/{post_id}/convert-type", response_class=HTMLResponse)
+async def convert_content_type(request: Request, post_id: int):
+    """Toggle a post between feed photo and story formats.
+
+    Not allowed for already-published posts."""
+    from fastapi.responses import Response
+
+    brand_id = get_dashboard_brand(request)
+    post = await query_one(
+        "SELECT status, content_type FROM content_queue WHERE id = ? AND brand_id = ?",
+        (post_id, brand_id),
+    )
+    if not post:
+        return HTMLResponse('<div class="text-sm text-error">Post not found.</div>', status_code=404)
+    if post["status"] == "published":
+        return HTMLResponse(
+            '<div class="text-sm text-error">Cannot convert an already-published post.</div>',
+            status_code=400,
+        )
+
+    current = (post.get("content_type") or "").lower()
+    # Anything not 'story' flips to 'story'; 'story' flips back to 'photo'.
+    new_type = "photo" if current == "story" else "story"
+
+    await execute(
+        "UPDATE content_queue SET content_type = ? WHERE id = ? AND brand_id = ?",
+        (new_type, post_id, brand_id),
+    )
+
+    # Tell htmx to refresh the page so every reference to content_type updates
+    # (chips, filters, badges, conditional blocks).
+    return Response(status_code=204, headers={"HX-Refresh": "true"})
+
+
 @router.post("/queue/{post_id}/requeue", response_class=HTMLResponse)
 async def requeue_post(request: Request, post_id: int):
     brand_id = get_dashboard_brand(request)
@@ -220,19 +317,30 @@ async def edit_schedule(request: Request, post_id: int, scheduled_date: str = Fo
         (post_id, brand_id),
     )
     if not post or post["status"] not in ("pending_approval", "draft", "approved"):
-        return HTMLResponse('<div class="detail-field"><div class="detail-field-label">Schedule</div>'
-                            '<div class="detail-field-value text-sm" style="color:var(--status-failed)">Cannot edit.</div></div>')
+        return _render_detail_edit_error("schedule-field", "Schedule")
 
     await execute(
         "UPDATE content_queue SET scheduled_date = ?, scheduled_time = ? WHERE id = ? AND brand_id = ?",
         (scheduled_date, scheduled_time, post_id, brand_id),
     )
-    from html import escape
-    return HTMLResponse(
-        f'<div class="detail-field" id="schedule-field">'
-        f'<div class="detail-field-label">Schedule <span class="text-xs text-muted" style="margin-left:8px;">Saved</span></div>'
-        f'<div class="detail-field-value">{escape(scheduled_date)} {escape(scheduled_time)}</div>'
-        f'</div>'
+    schedule_value = "—"
+    schedule_classes = "queue-detail-value"
+    if scheduled_date or scheduled_time:
+        schedule_value = f'{escape(scheduled_date or "—")}{(" " + escape(scheduled_time)) if scheduled_time else ""}'
+    else:
+        schedule_classes += " queue-detail-empty"
+    return _render_editable_detail_block(
+        "schedule-field",
+        "Schedule",
+        "schedule-display",
+        "schedule-edit",
+        post_id,
+        "edit-schedule",
+        f'<div class="{schedule_classes}" id="schedule-display">{schedule_value}</div>',
+        f'<div class="queue-detail-form-row">'
+        f'<input type="date" name="scheduled_date" value="{escape(scheduled_date)}" class="input input-bordered input-sm">'
+        f'<input type="time" name="scheduled_time" value="{escape(scheduled_time)}" class="input input-bordered input-sm">'
+        f'</div>',
     )
 
 
@@ -244,20 +352,27 @@ async def edit_caption(request: Request, post_id: int, caption: str = Form("")):
         (post_id, brand_id),
     )
     if not post or post["status"] not in ("pending_approval", "draft", "approved"):
-        return HTMLResponse('<div class="detail-field"><div class="detail-field-label">Caption</div>'
-                            '<div class="detail-field-value text-sm" style="color:var(--status-failed)">Cannot edit.</div></div>')
+        return _render_detail_edit_error("caption-field", "Caption", wide=True)
 
     await execute(
         "UPDATE content_queue SET caption = ? WHERE id = ? AND brand_id = ?",
         (caption, post_id, brand_id),
     )
-    from html import escape
     escaped = escape(caption)
-    return HTMLResponse(
-        f'<div class="detail-field" id="caption-field">'
-        f'<div class="detail-field-label">Caption <span class="text-xs text-muted" style="margin-left:8px;">Saved</span></div>'
-        f'<div class="detail-field-value rtl pre-wrap">{escaped}</div>'
-        f'</div>'
+    caption_value = escaped if escaped else "—"
+    caption_classes = "queue-detail-value whitespace-pre-wrap break-words"
+    if not escaped:
+        caption_classes += " queue-detail-empty"
+    return _render_editable_detail_block(
+        "caption-field",
+        "Caption",
+        "caption-display",
+        "caption-edit",
+        post_id,
+        "edit-caption",
+        f'<div class="{caption_classes}" dir="rtl" id="caption-display">{caption_value}</div>',
+        f'<textarea name="caption" rows="4" dir="rtl" class="textarea textarea-bordered text-sm">{escaped}</textarea>',
+        wide=True,
     )
 
 
@@ -269,20 +384,27 @@ async def edit_hashtags(request: Request, post_id: int, hashtags: str = Form("")
         (post_id, brand_id),
     )
     if not post or post["status"] not in ("pending_approval", "draft", "approved"):
-        return HTMLResponse('<div class="detail-field"><div class="detail-field-label">Hashtags</div>'
-                            '<div class="detail-field-value text-sm" style="color:var(--status-failed)">Cannot edit.</div></div>')
+        return _render_detail_edit_error("hashtags-field", "Hashtags", wide=True)
 
     await execute(
         "UPDATE content_queue SET hashtags = ? WHERE id = ? AND brand_id = ?",
         (hashtags, post_id, brand_id),
     )
-    from html import escape
     escaped = escape(hashtags)
-    return HTMLResponse(
-        f'<div class="detail-field" id="hashtags-field">'
-        f'<div class="detail-field-label">Hashtags <span class="text-xs text-muted" style="margin-left:8px;">Saved</span></div>'
-        f'<div class="detail-field-value rtl text-sm">{escaped}</div>'
-        f'</div>'
+    hashtags_value = escaped if escaped else "—"
+    hashtags_classes = "queue-detail-value"
+    if not escaped:
+        hashtags_classes += " queue-detail-empty"
+    return _render_editable_detail_block(
+        "hashtags-field",
+        "Hashtags",
+        "hashtags-display",
+        "hashtags-edit",
+        post_id,
+        "edit-hashtags",
+        f'<div class="{hashtags_classes}" dir="rtl" id="hashtags-display">{hashtags_value}</div>',
+        f'<input type="text" name="hashtags" dir="rtl" value="{escaped}" class="input input-bordered input-sm">',
+        wide=True,
     )
 
 
@@ -293,7 +415,8 @@ async def poll_post_status(request: Request, post_id: int):
 
     brand_id = get_dashboard_brand(request)
     post = await query_one(
-        "SELECT status, image_url, caption FROM content_queue WHERE id = ? AND brand_id = ?",
+        "SELECT status, image_url, caption, topic, hashtags, visual_direction, content_pillar "
+        "FROM content_queue WHERE id = ? AND brand_id = ?",
         (post_id, brand_id),
     )
     if not post:
@@ -303,11 +426,16 @@ async def poll_post_status(request: Request, post_id: int):
         "status": post["status"],
         "image_url": post.get("image_url") or "",
         "caption": post.get("caption") or "",
+        "topic": post.get("topic") or "",
+        "hashtags": post.get("hashtags") or "",
+        "visual_direction": post.get("visual_direction") or "",
+        "content_pillar": post.get("content_pillar") or "",
     })
 
 
 def _do_direct_regen(post_id: int, direction: str, content_pillar: str,
-                     brand_id: str = "", original_direction: str = ""):
+                     brand_id: str = "", original_direction: str = "",
+                     reference_url: str | None = None):
     """Synchronous: generate image from user direction + LLM caption, update post."""
     from db.connection import get_db
     from tools.content_guide import build_image_prompt
@@ -323,6 +451,9 @@ def _do_direct_regen(post_id: int, direction: str, content_pillar: str,
 
     db = get_db()
 
+    ct_row = db.execute("SELECT content_type FROM content_queue WHERE id = ?", (post_id,)).fetchone()
+    content_type = (ct_row["content_type"] if ct_row else None) or "photo"
+
     # Mark as draft immediately so the UI reflects that regeneration is in progress
     db.execute(
         "UPDATE content_queue SET status = 'draft', image_url = NULL WHERE id = ?",
@@ -331,26 +462,35 @@ def _do_direct_regen(post_id: int, direction: str, content_pillar: str,
     db.commit()
 
     try:
-        # If we have an original direction, use LLM to merge the original with user feedback
-        # so that "keep it, just make it more golden" refines the original prompt
-        # instead of replacing it entirely.
-        if original_direction and original_direction.strip() != direction:
-            llm = get_llm(temperature=0.3)
-            merged = llm.invoke(
-                "You refine image-generation prompts.\n\n"
-                f"Original visual direction:\n{original_direction}\n\n"
-                f"User feedback / modification request:\n{direction}\n\n"
-                "Write a single updated visual direction that keeps the original subject "
-                "and composition but incorporates the user's requested changes. "
-                "Output ONLY the updated direction, nothing else."
-            )
-            effective_direction = merged.content.strip()
-        else:
+        # When a reference image is supplied, the edit endpoint uses it as the
+        # primary visual anchor. Skip the LLM merge with the prior direction
+        # (which would Frankenstein an unrelated composition onto the ref) and
+        # skip the heavy brand-template wrapping (which would override the ref's
+        # style). Use the user's direction verbatim with a minimal instruction.
+        if reference_url:
+            from tools.content_guide import build_reference_edit_prompt
             effective_direction = direction
+            prompt = build_reference_edit_prompt(direction)
+        else:
+            # If we have an original direction, use LLM to merge the original with user feedback
+            # so that "keep it, just make it more golden" refines the original prompt
+            # instead of replacing it entirely.
+            if original_direction and original_direction.strip() != direction:
+                llm = get_llm(temperature=0.3)
+                merged = llm.invoke(
+                    "You refine image-generation prompts.\n\n"
+                    f"Original visual direction:\n{original_direction}\n\n"
+                    f"User feedback / modification request:\n{direction}\n\n"
+                    "Write a single updated visual direction that keeps the original subject "
+                    "and composition but incorporates the user's requested changes. "
+                    "Output ONLY the updated direction, nothing else."
+                )
+                effective_direction = merged.content.strip()
+            else:
+                effective_direction = direction
+            prompt = build_image_prompt.invoke(effective_direction)
 
-        # Generate image
-        prompt = build_image_prompt.invoke(effective_direction)
-        image_url = generate_one(prompt)
+        image_url = generate_one(prompt, reference_url=reference_url, content_type=content_type)
 
         # Generate caption using brand voice
         brand_name = bc.identity.name or brand_id
@@ -399,9 +539,10 @@ async def direct_regen_post(
     post_id: int,
     background_tasks: BackgroundTasks,
     direction: str = Form(""),
+    reference_url: str = Form(""),
 ):
     if not direction.strip():
-        return HTMLResponse('<div class="text-sm" style="color:var(--status-failed)">Please enter a direction.</div>')
+        return HTMLResponse('<div class="text-sm text-error">Please enter a direction.</div>')
 
     brand_id = get_dashboard_brand(request)
     post = await query_one(
@@ -409,17 +550,101 @@ async def direct_regen_post(
         (post_id, brand_id),
     )
     if not post:
-        return HTMLResponse('<div class="text-sm" style="color:var(--status-failed)">Post not found.</div>')
+        return HTMLResponse('<div class="text-sm text-error">Post not found.</div>')
 
     background_tasks.add_task(
         _do_direct_regen, post_id, direction.strip(), post.get("content_pillar", "product"),
         brand_id, post.get("visual_direction", ""),
+        reference_url=reference_url.strip() or None,
     )
 
     return HTMLResponse(
-        f'<div class="text-sm" style="color:var(--brand-green)">'
-        f'Generating image for "<strong>{direction.strip()}</strong>" with a matching caption... '
-        f'Refresh the page in a minute to see the result.</div>'
+        f'<div class="alert alert-success text-sm shadow-sm">'
+        f'<span class="loading loading-spinner loading-sm"></span>'
+        f'Generating image for "<strong>{direction.strip()}</strong>" with a matching caption...</div>'
+    )
+
+
+def _do_refine(post_id: int, direction: str, brand_id: str, reference_image: str):
+    """Synchronous: iterative image-only refinement. Uses the post's current
+    image as the reference, applies the user's short edit instruction, and
+    updates ONLY image_url. Caption, visual_direction, and topic are left
+    untouched — refine is a visual tweak, not a content rewrite."""
+    from db.connection import get_db
+    from tools.content_guide import build_reference_edit_prompt
+    from tools.image_gen import generate_one
+
+    if brand_id:
+        from brands.loader import set_brand
+        set_brand(brand_id)
+
+    db = get_db()
+
+    ct_row = db.execute("SELECT content_type FROM content_queue WHERE id = ?", (post_id,)).fetchone()
+    content_type = (ct_row["content_type"] if ct_row else None) or "photo"
+
+    # Keep the old image_url in place while generating so the UI can keep
+    # showing the current image; only the status reflects the in-flight work.
+    db.execute(
+        "UPDATE content_queue SET status = 'draft' WHERE id = ?",
+        (post_id,),
+    )
+    db.commit()
+
+    try:
+        prompt = build_reference_edit_prompt(direction)
+        image_url = generate_one(prompt, reference_url=reference_image, content_type=content_type)
+
+        db.execute(
+            "UPDATE content_queue SET image_url = ?, status = 'pending_approval' WHERE id = ?",
+            (image_url, post_id),
+        )
+        db.commit()
+        log.info(f"Post {post_id} refined: '{direction}' → {image_url}")
+    except Exception as e:
+        log.error(f"Post {post_id} refine failed: {e}")
+        db.execute(
+            "UPDATE content_queue SET status = 'pending_approval' WHERE id = ?",
+            (post_id,),
+        )
+        db.commit()
+
+
+@router.post("/queue/{post_id}/refine", response_class=HTMLResponse)
+async def refine_post(
+    request: Request,
+    post_id: int,
+    background_tasks: BackgroundTasks,
+    direction: str = Form(""),
+):
+    """Iterative refinement: use the post's current image as the reference
+    and apply a short edit instruction on top of it. Each refine chains off
+    the latest image, so "add vanilla beans" → "now add my logo" works."""
+    if not direction.strip():
+        return HTMLResponse('<div class="text-sm text-error">Please describe the change you want.</div>')
+
+    brand_id = get_dashboard_brand(request)
+    post = await query_one(
+        "SELECT id, image_url FROM content_queue WHERE id = ? AND brand_id = ?",
+        (post_id, brand_id),
+    )
+    if not post:
+        return HTMLResponse('<div class="text-sm text-error">Post not found.</div>')
+
+    current_image = (post.get("image_url") or "").strip()
+    if not current_image:
+        return HTMLResponse(
+            '<div class="text-sm text-error">This post has no image yet — use Regen + Direction first.</div>'
+        )
+
+    background_tasks.add_task(
+        _do_refine, post_id, direction.strip(), brand_id, current_image,
+    )
+
+    return HTMLResponse(
+        f'<div class="alert alert-success text-sm shadow-sm">'
+        f'<span class="loading loading-spinner loading-sm"></span>'
+        f'Refining image: "<strong>{direction.strip()}</strong>"...</div>'
     )
 
 
@@ -475,7 +700,7 @@ async def get_suggestions(request: Request, post_id: int):
         (post_id, brand_id),
     )
     if not post:
-        return HTMLResponse('<div class="text-sm text-muted">Post not found.</div>')
+        return HTMLResponse('<div class="text-sm opacity-50">Post not found.</div>')
 
     # Ensure brand context is set before generating suggestions
     from brands.loader import set_brand
@@ -485,11 +710,11 @@ async def get_suggestions(request: Request, post_id: int):
     suggestions = await loop.run_in_executor(None, partial(_generate_suggestions, post))
 
     if not suggestions:
-        return HTMLResponse('<div class="text-sm" style="color:var(--status-failed)">Failed to generate suggestions. Try again.</div>')
+        return HTMLResponse('<div class="text-sm text-error">Failed to generate suggestions. Try again.</div>')
 
     from html import escape
 
-    html = '<div class="section-label">Pick a replacement</div>'
+    html = '<h2 class="text-xs font-medium uppercase tracking-widest opacity-50 mb-3">Pick a replacement</h2>'
     for i, s in enumerate(suggestions):
         topic = escape(s.get("topic", ""))
         caption = escape(s.get("caption", ""))
@@ -497,26 +722,27 @@ async def get_suggestions(request: Request, post_id: int):
         visual = escape(s.get("visual_direction", ""))
         pillar = escape(s.get("content_pillar", ""))
         html += f"""
-        <div class="card mb-4" style="padding:16px">
-            <div class="text-sm" style="font-weight:600">{i+1}. {topic}</div>
-            <div class="text-sm rtl mt-2" style="line-height:1.6">{caption}</div>
-            <div class="text-xs text-muted mt-2">{visual} &middot; {pillar.replace('_', ' ')}</div>
-            <div class="text-xs text-muted">{hashtags}</div>
-            <form class="mt-4" hx-post="/queue/{post_id}/regenerate"
-                  hx-target="#regen-area" hx-swap="innerHTML"
-                  hx-indicator="#use-this-spinner-{i}"
-                  hx-disabled-elt="find button[type='submit']">
-                <input type="hidden" name="topic" value="{topic}">
-                <input type="hidden" name="caption" value="{caption}">
-                <input type="hidden" name="hashtags" value="{hashtags}">
-                <input type="hidden" name="visual_direction" value="{visual}">
-                <input type="hidden" name="content_pillar" value="{pillar}">
-                <button type="submit" class="btn btn-primary btn-xs">
-                    <span class="btn-spinner"></span>
-                    <span class="btn-label">Use This</span>
-                </button>
-                <span id="use-this-spinner-{i}" class="htmx-indicator text-sm text-muted">Regenerating...</span>
-            </form>
+        <div class="card bg-base-100 shadow-sm mb-4">
+            <div class="card-body p-4">
+                <div class="text-sm font-semibold">{i+1}. {topic}</div>
+                <div class="text-sm mt-2" dir="rtl" style="line-height:1.6">{caption}</div>
+                <div class="text-xs opacity-50 mt-2">{visual} &middot; {pillar.replace('_', ' ')}</div>
+                <div class="text-xs opacity-50">{hashtags}</div>
+                <form class="mt-3" hx-post="/queue/{post_id}/regenerate"
+                      hx-target="#regen-area" hx-swap="innerHTML"
+                      hx-indicator="#use-this-spinner-{i}"
+                      hx-disabled-elt="find button[type='submit']">
+                    <input type="hidden" name="topic" value="{topic}">
+                    <input type="hidden" name="caption" value="{caption}">
+                    <input type="hidden" name="hashtags" value="{hashtags}">
+                    <input type="hidden" name="visual_direction" value="{visual}">
+                    <input type="hidden" name="content_pillar" value="{pillar}">
+                    <button type="submit" class="btn btn-primary btn-xs">
+                        <span class="loading loading-spinner loading-xs htmx-indicator" id="use-this-spinner-{i}"></span>
+                        Use This
+                    </button>
+                </form>
+            </div>
         </div>"""
 
     return HTMLResponse(html)
@@ -536,6 +762,9 @@ def _do_regenerate(post_id: int, topic: str, caption: str, hashtags: str,
 
     db = get_db()
 
+    ct_row = db.execute("SELECT content_type FROM content_queue WHERE id = ?", (post_id,)).fetchone()
+    content_type = (ct_row["content_type"] if ct_row else None) or "photo"
+
     # Update post content
     db.execute(
         "UPDATE content_queue SET topic = ?, caption = ?, hashtags = ?, "
@@ -548,7 +777,7 @@ def _do_regenerate(post_id: int, topic: str, caption: str, hashtags: str,
     # Generate new image
     try:
         prompt = build_image_prompt.invoke(visual_direction)
-        image_url = generate_one(prompt)
+        image_url = generate_one(prompt, content_type=content_type)
         db.execute(
             "UPDATE content_queue SET image_url = ?, status = 'pending_approval' WHERE id = ?",
             (image_url, post_id),
@@ -581,7 +810,7 @@ async def regenerate_post(
         (post_id, brand_id),
     )
     if not post:
-        return HTMLResponse('<div class="text-sm" style="color:var(--status-failed)">Post not found.</div>')
+        return HTMLResponse('<div class="text-sm text-error">Post not found.</div>')
 
     background_tasks.add_task(
         _do_regenerate, post_id, topic, caption, hashtags, visual_direction, content_pillar,
@@ -589,6 +818,7 @@ async def regenerate_post(
     )
 
     return HTMLResponse(
-        '<div class="text-sm" style="color:var(--brand-green)">'
-        'Regenerating image... This may take a minute. Refresh the page to see the result.</div>'
+        '<div class="alert alert-success text-sm shadow-sm">'
+        '<span class="loading loading-spinner loading-sm"></span>'
+        'Regenerating image... The page will update automatically when ready.</div>'
     )
