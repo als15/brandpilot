@@ -184,6 +184,38 @@ brand_config: BrandConfig = BrandConfig()
 
 _initialized = False
 
+# Snapshot of os.environ captured before any brand env mutation, used to
+# reset between set_brand() calls so one brand's overrides don't leak into
+# another. Captured lazily on first _reset_env_to_base() call.
+_BASE_ENV: dict[str, str] | None = None
+
+
+def _reset_env_to_base() -> None:
+    """Restore os.environ to the snapshot captured before any brand load."""
+    global _BASE_ENV
+    if _BASE_ENV is None:
+        _BASE_ENV = dict(os.environ)
+        return
+    for k in list(os.environ.keys()):
+        if k not in _BASE_ENV:
+            del os.environ[k]
+    for k, v in _BASE_ENV.items():
+        os.environ[k] = v
+
+
+def _apply_prefixed_env(slug: str) -> None:
+    """Apply brand-prefixed env vars by copying them to their unprefixed form.
+
+    Example: ``MILA_TELEGRAM_BOT_TOKEN=xxx`` becomes ``TELEGRAM_BOT_TOKEN=xxx``
+    when the active brand is ``mila``. Lets Railway (or any host where per-brand
+    .env files aren't shipped) supply brand-specific credentials via a single
+    env-var namespace.
+    """
+    prefix = slug.upper().replace("-", "_") + "_"
+    for k, v in list(os.environ.items()):
+        if k.startswith(prefix) and len(k) > len(prefix):
+            os.environ[k[len(prefix):]] = v
+
 
 def init_brand(slug: str | None = None) -> BrandConfig:
     """Initialize the global brand_config singleton.
@@ -199,6 +231,9 @@ def init_brand(slug: str | None = None) -> BrandConfig:
     if slug is None:
         slug = _resolve_slug()
 
+    # Capture baseline env before any brand mutation.
+    _reset_env_to_base()
+
     brand_config = BrandConfig.load(slug)
     _initialized = True
 
@@ -207,6 +242,8 @@ def init_brand(slug: str | None = None) -> BrandConfig:
         from dotenv import load_dotenv
         load_dotenv(brand_config.env_path, override=True)
 
+    _apply_prefixed_env(slug)
+
     return brand_config
 
 
@@ -214,14 +251,17 @@ def set_brand(slug: str) -> BrandConfig:
     """Switch the global brand_config to a different brand.
 
     Used by the daemon when executing tasks for different brands.
-    Also loads the brand's .env credentials.
+    Also loads the brand's .env credentials (or brand-prefixed env vars).
     """
     global brand_config
+    _reset_env_to_base()
     brand_config = BrandConfig.load(slug)
 
     if brand_config.env_path.exists():
         from dotenv import load_dotenv
         load_dotenv(brand_config.env_path, override=True)
+
+    _apply_prefixed_env(slug)
 
     return brand_config
 
