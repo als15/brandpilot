@@ -200,65 +200,81 @@
         color: rgba(26, 26, 24, 0.62);
     }
 
-    .schedule-job-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 12px;
+    .schedule-jobs-table-wrap {
         margin-top: 14px;
-    }
-
-    .schedule-job-card {
-        position: relative;
-        display: grid;
-        gap: 12px;
-        min-height: 0;
-        padding: 14px;
+        overflow-x: auto;
         border-radius: 16px;
-        background: #fffdfa;
-        border: 1px solid rgba(26, 26, 24, 0.06);
-        box-shadow: 0 4px 14px rgba(43, 48, 37, 0.03);
+        border: 1px solid rgba(26, 26, 24, 0.07);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), #fbf6ee);
     }
 
-    .schedule-job-card::before {
-        content: "";
-        position: absolute;
-        inset: 0 auto 0 0;
-        width: 4px;
-        border-radius: 16px 0 0 16px;
-        background: rgba(91, 141, 184, 0.28);
+    .schedule-jobs-table {
+        width: 100%;
+        min-width: 760px;
+        border-collapse: separate;
+        border-spacing: 0;
     }
 
-    .schedule-job-card.is-success::before {
-        background: rgba(74, 93, 58, 0.48);
+    .schedule-jobs-table thead th {
+        padding: 12px 14px;
+        border-bottom: 1px solid rgba(26, 26, 24, 0.08);
+        background: rgba(249, 244, 235, 0.92);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        text-align: left;
+        color: rgba(26, 26, 24, 0.52);
     }
 
-    .schedule-job-card.is-failure::before {
-        background: rgba(184, 91, 91, 0.56);
+    .schedule-jobs-table tbody tr {
+        background: rgba(255, 253, 250, 0.84);
     }
 
-    .schedule-job-card.is-upcoming::before {
-        background: rgba(212, 168, 67, 0.6);
+    .schedule-jobs-table tbody tr + tr td {
+        border-top: 1px solid rgba(26, 26, 24, 0.06);
     }
 
-    .schedule-job-top {
-        display: flex;
-        justify-content: space-between;
-        gap: 10px;
-        align-items: start;
+    .schedule-jobs-table tbody tr.is-success {
+        box-shadow: inset 4px 0 0 rgba(74, 93, 58, 0.46);
+    }
+
+    .schedule-jobs-table tbody tr.is-failure {
+        box-shadow: inset 4px 0 0 rgba(184, 91, 91, 0.56);
+    }
+
+    .schedule-jobs-table tbody tr.is-upcoming {
+        box-shadow: inset 4px 0 0 rgba(212, 168, 67, 0.6);
+    }
+
+    .schedule-jobs-table td {
+        padding: 14px;
+        vertical-align: top;
+    }
+
+    .schedule-job-title-cell {
+        min-width: 180px;
     }
 
     .schedule-job-title {
         margin: 0;
-        font-size: 16px;
-        line-height: 1.2;
+        font-size: 15px;
+        line-height: 1.25;
+    }
+
+    .schedule-job-key {
+        display: block;
+        margin-top: 4px;
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: rgba(26, 26, 24, 0.46);
     }
 
     .schedule-job-cron {
-        margin-top: 4px;
-        font-size: 10px;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        color: var(--gray-text);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--dark);
     }
 
     .schedule-job-state {
@@ -286,29 +302,8 @@
         color: #906f26;
     }
 
-    .schedule-job-meta {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 8px;
-    }
-
-    .schedule-job-meta-block {
-        padding: 8px 10px;
-        border-radius: 12px;
-        background: rgba(31, 49, 40, 0.04);
-    }
-
-    .schedule-job-meta-label {
-        display: block;
-        font-size: 9px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--gray-text);
-    }
-
     .schedule-job-meta-value {
         display: block;
-        margin-top: 4px;
         font-size: 12px;
         font-weight: 600;
         line-height: 1.3;
@@ -323,13 +318,14 @@
 
     .schedule-job-actions {
         display: flex;
-        align-items: end;
-        justify-content: space-between;
-        gap: 10px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+        min-width: 180px;
     }
 
     .schedule-run-button {
-        min-width: 92px;
+        min-width: 110px;
         font-size: 12px;
     }
 
@@ -517,16 +513,13 @@
             border-radius: 16px;
         }
 
-        .schedule-metrics,
-        .schedule-job-grid,
-        .schedule-job-meta {
+        .schedule-metrics {
             grid-template-columns: 1fr;
         }
 
         .schedule-job-actions,
         .schedule-upcoming-meta {
             align-items: start;
-            flex-direction: column;
         }
 
         .schedule-run-button {
@@ -617,7 +610,20 @@
             <span class="schedule-section-label">Scheduled jobs</span>
             <h2 class="schedule-section-title">Jobs</h2>
 
-            <div class="schedule-job-grid">
+            <div class="schedule-jobs-table-wrap">
+                <table class="schedule-jobs-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Job</th>
+                            <th scope="col">Schedule</th>
+                            <th scope="col">Status</th>
+                            <th scope="col">Next run</th>
+                            <th scope="col">Last success</th>
+                            <th scope="col">Last failure</th>
+                            <th scope="col">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
                 {% for job in schedule %}
                 {% set has_failure = job.last_failure %}
                 {% set has_success = job.last_success %}
@@ -635,38 +641,37 @@
                     {% set tone = "" %}
                     {% set state_label = "Awaiting run" %}
                 {% endif %}
-                <article class="schedule-job-card {{ tone }}">
-                    <div class="schedule-job-top">
-                        <div>
+                        <tr class="{{ tone }}">
+                            <td class="schedule-job-title-cell">
+                                <div>
                             <h3 class="schedule-job-title">{{ job.label }}</h3>
-                            <div class="schedule-job-cron">{{ job.cron }}</div>
-                        </div>
-                        <span class="schedule-job-state {{ tone or 'is-upcoming' }}">{{ state_label }}</span>
-                    </div>
-
-                    <div class="schedule-job-meta">
-                        <div class="schedule-job-meta-block">
-                            <span class="schedule-job-meta-label">Next run</span>
-                            <span class="schedule-job-meta-value {% if not next_run %}is-empty{% endif %}">
-                                {{ next_run or 'Waiting for scheduler' }}
-                            </span>
-                        </div>
-                        <div class="schedule-job-meta-block">
-                            <span class="schedule-job-meta-label">Last success</span>
-                            <span class="schedule-job-meta-value {% if not job.last_success %}is-empty{% endif %}">
-                                {{ job.last_success | datefmt if job.last_success else 'No success yet' }}
-                            </span>
-                        </div>
-                        <div class="schedule-job-meta-block">
-                            <span class="schedule-job-meta-label">Last failure</span>
-                            <span class="schedule-job-meta-value {% if not job.last_failure %}is-empty{% endif %}">
-                                {{ job.last_failure | datefmt if job.last_failure else 'None recorded' }}
-                            </span>
-                        </div>
-                    </div>
-
-                    <div class="schedule-job-actions">
-                        <div class="text-sm text-muted">
+                                    <span class="schedule-job-key">{{ job.task }}</span>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="schedule-job-cron">{{ job.cron }}</span>
+                            </td>
+                            <td>
+                                <span class="schedule-job-state {{ tone or 'is-upcoming' }}">{{ state_label }}</span>
+                            </td>
+                            <td>
+                                <span class="schedule-job-meta-value {% if not next_run %}is-empty{% endif %}">
+                                    {{ next_run or 'Waiting for scheduler' }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="schedule-job-meta-value {% if not job.last_success %}is-empty{% endif %}">
+                                    {{ job.last_success | datefmt if job.last_success else 'No success yet' }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="schedule-job-meta-value {% if not job.last_failure %}is-empty{% endif %}">
+                                    {{ job.last_failure | datefmt if job.last_failure else 'None recorded' }}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="schedule-job-actions">
+                                    <div class="text-sm text-muted">
                             {% if has_failure %}
                                 Check the latest failure details before the next cycle.
                             {% elif next_run %}
@@ -674,18 +679,21 @@
                             {% else %}
                                 Safe to trigger manually when you need fresh output.
                             {% endif %}
-                        </div>
-                        <button class="btn btn-primary schedule-run-button"
-                                hx-post="/schedule/{{ job.task }}/run"
-                                hx-swap="outerHTML"
-                                hx-disabled-elt="this"
-                                hx-confirm="Run {{ job.label }} now?">
-                            <span class="loading loading-spinner loading-xs htmx-indicator"></span>
-                            Run now
-                        </button>
-                    </div>
-                </article>
+                                    </div>
+                                    <button class="btn btn-primary schedule-run-button"
+                                            hx-post="/schedule/{{ job.task }}/run"
+                                            hx-swap="outerHTML"
+                                            hx-disabled-elt="this"
+                                            hx-confirm="Run {{ job.label }} now?">
+                                        <span class="loading loading-spinner loading-xs htmx-indicator"></span>
+                                        Run now
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
                 {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
 
