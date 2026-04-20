@@ -61,29 +61,41 @@ TASK_TIMEOUTS = {
 }
 DEFAULT_TIMEOUT = 300
 
+# Serializes scheduled-task execution across brands. set_brand() mutates
+# process-global os.environ (for IG/Telegram credentials), so two concurrent
+# brand jobs would otherwise race and either use each other's credentials or
+# query the wrong brand's data. See issue #5.
+_brand_lock = asyncio.Lock()
 
-def _dependency_met(task_type: str) -> tuple[bool, str]:
+
+def _brand_timezone(brand_slug: str):
+    """Load a brand's tz without mutating the global brand_config."""
+    from zoneinfo import ZoneInfo
+    from brands.loader import BrandConfig
+    return ZoneInfo(BrandConfig.load(brand_slug).identity.timezone)
+
+
+def _dependency_met(task_type: str, brand_slug: str) -> tuple[bool, str]:
     """Check if the prerequisite task for this task succeeded today. Returns (ok, reason)."""
     dep = TASK_DEPENDENCIES.get(task_type)
     if not dep:
         return True, ""
 
-    from zoneinfo import ZoneInfo
     from db.connection import _is_postgres
-    today = datetime.now(ZoneInfo(brands.loader.brand_config.identity.timezone)).strftime("%Y-%m-%d")
+    today = datetime.now(_brand_timezone(brand_slug)).strftime("%Y-%m-%d")
 
     db = get_db()
     if _is_postgres():
         row = db.execute(
             "SELECT status FROM run_log WHERE task_type = %s AND brand_id = %s "
             "AND started_at::date = %s::date ORDER BY started_at DESC LIMIT 1",
-            (dep, brands.loader.brand_config.slug, today),
+            (dep, brand_slug, today),
         ).fetchone()
     else:
         row = db.execute(
             "SELECT status FROM run_log WHERE task_type = ? AND brand_id = ? "
             "AND date(started_at) = ? ORDER BY started_at DESC LIMIT 1",
-            (dep, brands.loader.brand_config.slug, today),
+            (dep, brand_slug, today),
         ).fetchone()
 
     if not row:
@@ -93,10 +105,9 @@ def _dependency_met(task_type: str) -> tuple[bool, str]:
     return True, ""
 
 
-def _has_publishable_content(task_type: str) -> bool:
+def _has_publishable_content(task_type: str, brand_slug: str) -> bool:
     """Check if there are approved posts ready to publish for the given task type."""
-    from zoneinfo import ZoneInfo
-    now_il = datetime.now(ZoneInfo(brands.loader.brand_config.identity.timezone))
+    now_il = datetime.now(_brand_timezone(brand_slug))
     today = now_il.strftime("%Y-%m-%d")
     now_time = now_il.strftime("%H:%M")
 
@@ -106,16 +117,14 @@ def _has_publishable_content(task_type: str) -> bool:
         "SELECT COUNT(*) as cnt FROM content_queue "
         "WHERE status = 'approved' AND content_type = ? AND brand_id = ? AND image_url IS NOT NULL "
         "AND (scheduled_date < ? OR (scheduled_date = ? AND scheduled_time <= ?))",
-        (content_type, brands.loader.brand_config.slug, today, today, now_time),
+        (content_type, brand_slug, today, today, now_time),
     ).fetchone()
     return row["cnt"] > 0
 
 
-def _skip_reason(content_type: str) -> str:
+def _skip_reason(content_type: str, brand_slug: str) -> str:
     """Diagnose why there's nothing to publish — returns a human-readable reason."""
-    from zoneinfo import ZoneInfo
-    bid = brands.loader.brand_config.slug
-    now_il = datetime.now(ZoneInfo(brands.loader.brand_config.identity.timezone))
+    now_il = datetime.now(_brand_timezone(brand_slug))
     today = now_il.strftime("%Y-%m-%d")
     now_time = now_il.strftime("%H:%M")
 
@@ -123,13 +132,13 @@ def _skip_reason(content_type: str) -> str:
     approved = db.execute(
         "SELECT COUNT(*) as cnt FROM content_queue "
         "WHERE status = 'approved' AND content_type = ? AND brand_id = ?",
-        (content_type, bid),
+        (content_type, brand_slug),
     ).fetchone()["cnt"]
     if approved == 0:
         statuses = db.execute(
             "SELECT status, COUNT(*) as cnt FROM content_queue "
             "WHERE content_type = ? AND brand_id = ? AND scheduled_date = ? GROUP BY status",
-            (content_type, bid, today),
+            (content_type, brand_slug, today),
         ).fetchall()
         if not statuses:
             return f"No {content_type} posts scheduled for today ({today})."
@@ -141,7 +150,7 @@ def _skip_reason(content_type: str) -> str:
         "WHERE status = 'approved' AND content_type = ? AND brand_id = ? AND image_url IS NOT NULL "
         "AND scheduled_date = ? AND scheduled_time > ? "
         "ORDER BY scheduled_time LIMIT 3",
-        (content_type, bid, today, now_time),
+        (content_type, brand_slug, today, now_time),
     ).fetchall()
     if future:
         times = ", ".join(r["scheduled_time"] for r in future)
@@ -150,7 +159,7 @@ def _skip_reason(content_type: str) -> str:
     no_img = db.execute(
         "SELECT COUNT(*) as cnt FROM content_queue "
         "WHERE status = 'approved' AND content_type = ? AND brand_id = ? AND image_url IS NULL",
-        (content_type, bid),
+        (content_type, brand_slug),
     ).fetchone()["cnt"]
     if no_img:
         return f"{no_img} approved {content_type} post(s) but missing image_url."
@@ -158,126 +167,147 @@ def _skip_reason(content_type: str) -> str:
     return f"No publishable {content_type} posts found (approved: {approved}, now: {today} {now_time})."
 
 
-async def safe_run(task_type: str, bot, brand_slug: str | None = None):
-    """Run a task in a thread executor (LangGraph/Ollama are sync) and notify via Telegram.
+async def safe_run(task_type: str, bot, brand_slug: str):
+    """Run a scheduled task for a specific brand.
 
-    If brand_slug is provided, switches global brand_config to that brand before execution.
+    Holds ``_brand_lock`` around the entire run. ``set_brand()`` mutates
+    process-global ``os.environ`` for Instagram / Telegram credentials, so
+    without this serialization two brand jobs firing on the same cron tick
+    would race and either clobber each other's credentials (IG publish for
+    brand A sending with brand B's token) or their env-derived data (TELEGRAM_CHAT_ID
+    reads).
+
+    The DB-access side is now brand-scoped via the ``brand_slug`` parameter
+    rather than the global ``brand_config`` singleton — so even under the
+    lock, queries are self-describing and robust to future refactors.
+
+    The nested ``image_generation`` trigger (after ``content_review``) is
+    dispatched *after* the lock is released, so it can reacquire without
+    deadlocking (``asyncio.Lock`` is not reentrant).
     """
-    if brand_slug:
-        set_brand(brand_slug)
-    chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
     loop = asyncio.get_event_loop()
+    chain_image_generation = False
 
-    # Reset retryable failed posts back to approved before publishing
-    if task_type in SKIP_WHEN_EMPTY:
-        content_type = "photo" if task_type == "publish" else "story"
-        db = get_db()
-        db.execute(
-            "UPDATE content_queue SET status = 'approved' "
-            "WHERE status = 'failed' AND content_type = ? AND brand_id = ? AND retry_count < 3",
-            (content_type, brands.loader.brand_config.slug),
-        )
-        db.commit()
+    async with _brand_lock:
+        set_brand(brand_slug)
+        chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
 
-    # Skip publish tasks if nothing to publish (but still log it)
-    if task_type in SKIP_WHEN_EMPTY and not _has_publishable_content(task_type):
-        log.info(f"Skipping {task_type}: nothing to publish.")
-        db = get_db()
-        content_type = "photo" if task_type == "publish" else "story"
-        reason = _skip_reason(content_type)
-        db.execute(
-            "INSERT INTO run_log (brand_id, task_type, status, duration_seconds, summary) VALUES (?, ?, ?, ?, ?)",
-            (brands.loader.brand_config.slug, task_type, "skipped", 0, reason),
-        )
-        db.commit()
-        return
-
-    # Skip if a prerequisite task failed or hasn't run today
-    dep_ok, dep_reason = _dependency_met(task_type)
-    if not dep_ok:
-        log.warning(f"Skipping {task_type}: {dep_reason}")
-        db = get_db()
-        db.execute(
-            "INSERT INTO run_log (brand_id, task_type, status, duration_seconds, summary) VALUES (?, ?, ?, ?, ?)",
-            (brands.loader.brand_config.slug, task_type, "skipped", 0, dep_reason),
-        )
-        db.commit()
-        if chat_id:
-            await notify_error(bot, task_type, f"SKIPPED: {dep_reason}")
-        return
-
-    log.info(f"Starting scheduled task: {task_type}")
-    timeout = TASK_TIMEOUTS.get(task_type, DEFAULT_TIMEOUT)
-    try:
-        summary = await asyncio.wait_for(
-            loop.run_in_executor(None, run_task, task_type),
-            timeout=timeout,
-        )
-        log.info(f"Completed {task_type}: {summary[:200]}")
-
-        # Publish tasks: send per-post notifications
-        if task_type in ("publish", "publish_stories") and chat_id:
-            await _notify_publish_results(bot, task_type)
-        elif chat_id:
-            await notify_task_complete(bot, task_type, summary)
-
-        # After image generation, send approval notifications for new pending posts
-        if task_type == "image_generation" and chat_id:
-            await _send_pending_approvals(bot)
-
-        # After content review, run image gen for any revised posts reset to draft
-        if task_type == "content_review" and chat_id:
+        # Reset retryable failed posts back to approved before publishing
+        if task_type in SKIP_WHEN_EMPTY:
+            content_type = "photo" if task_type == "publish" else "story"
             db = get_db()
-            drafts = db.execute(
-                "SELECT COUNT(*) as cnt FROM content_queue "
-                "WHERE status = 'draft' AND brand_id = ? AND visual_direction IS NOT NULL AND image_url IS NULL",
-                (brands.loader.brand_config.slug,),
-            ).fetchone()
-            if drafts["cnt"] > 0:
-                log.info(f"Content review revised {drafts['cnt']} posts, triggering image generation...")
-                await safe_run("image_generation", bot)
-
-    except asyncio.TimeoutError:
-        log.error(f"Task {task_type} timed out after {timeout}s")
-        db = get_db()
-        db.execute(
-            "INSERT INTO run_log (brand_id, task_type, status, duration_seconds, error) VALUES (?, ?, ?, ?, ?)",
-            (brands.loader.brand_config.slug, task_type, "timeout", timeout, f"Task exceeded {timeout}s timeout"),
-        )
-        db.commit()
-        if chat_id:
-            await notify_error(bot, task_type, f"Task timed out after {timeout}s")
-    except Exception as e:
-        log.error(f"Failed {task_type}: {e}")
-        try:
-            db = get_db()
-            error_cat = "unknown"
-            err_str = str(e).lower()
-            if "401" in err_str or "unauthorized" in err_str or "token" in err_str:
-                error_cat = "auth_error"
-            elif "timeout" in err_str or "timed out" in err_str:
-                error_cat = "timeout"
-            elif "database" in err_str or "connection" in err_str:
-                error_cat = "db_error"
             db.execute(
-                "INSERT INTO run_log (brand_id, task_type, status, duration_seconds, error, error_category) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (brands.loader.brand_config.slug, task_type, "failed", 0, str(e)[:500], error_cat),
+                "UPDATE content_queue SET status = 'approved' "
+                "WHERE status = 'failed' AND content_type = ? AND brand_id = ? AND retry_count < 3",
+                (content_type, brand_slug),
             )
             db.commit()
-        except Exception:
-            log.error(f"Failed to log error for {task_type} to run_log")
-        if chat_id:
-            await notify_error(bot, task_type, str(e))
+
+        # Skip publish tasks if nothing to publish (but still log it)
+        if task_type in SKIP_WHEN_EMPTY and not _has_publishable_content(task_type, brand_slug):
+            log.info(f"Skipping {task_type} for {brand_slug}: nothing to publish.")
+            db = get_db()
+            content_type = "photo" if task_type == "publish" else "story"
+            reason = _skip_reason(content_type, brand_slug)
+            db.execute(
+                "INSERT INTO run_log (brand_id, task_type, status, duration_seconds, summary) VALUES (?, ?, ?, ?, ?)",
+                (brand_slug, task_type, "skipped", 0, reason),
+            )
+            db.commit()
+            return
+
+        # Skip if a prerequisite task failed or hasn't run today
+        dep_ok, dep_reason = _dependency_met(task_type, brand_slug)
+        if not dep_ok:
+            log.warning(f"Skipping {task_type} for {brand_slug}: {dep_reason}")
+            db = get_db()
+            db.execute(
+                "INSERT INTO run_log (brand_id, task_type, status, duration_seconds, summary) VALUES (?, ?, ?, ?, ?)",
+                (brand_slug, task_type, "skipped", 0, dep_reason),
+            )
+            db.commit()
+            if chat_id:
+                await notify_error(bot, task_type, f"SKIPPED ({brand_slug}): {dep_reason}")
+            return
+
+        log.info(f"Starting scheduled task: {task_type} for {brand_slug}")
+        timeout = TASK_TIMEOUTS.get(task_type, DEFAULT_TIMEOUT)
+        try:
+            summary = await asyncio.wait_for(
+                loop.run_in_executor(None, run_task, task_type, brand_slug),
+                timeout=timeout,
+            )
+            log.info(f"Completed {task_type} for {brand_slug}: {summary[:200]}")
+
+            # Publish tasks: send per-post notifications
+            if task_type in ("publish", "publish_stories") and chat_id:
+                await _notify_publish_results(bot, task_type, brand_slug)
+            elif chat_id:
+                await notify_task_complete(bot, task_type, summary)
+
+            # After image generation, send approval notifications for new pending posts
+            if task_type == "image_generation" and chat_id:
+                await _send_pending_approvals(bot, brand_slug)
+
+            # After content review, queue follow-up image generation if revisions happened.
+            # We only *decide* to chain here; the actual call runs after we release the
+            # lock so the recursive safe_run can reacquire it.
+            if task_type == "content_review" and chat_id:
+                db = get_db()
+                drafts = db.execute(
+                    "SELECT COUNT(*) as cnt FROM content_queue "
+                    "WHERE status = 'draft' AND brand_id = ? AND visual_direction IS NOT NULL AND image_url IS NULL",
+                    (brand_slug,),
+                ).fetchone()
+                if drafts["cnt"] > 0:
+                    log.info(f"Content review revised {drafts['cnt']} posts for {brand_slug}, queueing image generation...")
+                    chain_image_generation = True
+
+        except asyncio.TimeoutError:
+            log.error(f"Task {task_type} for {brand_slug} timed out after {timeout}s")
+            db = get_db()
+            db.execute(
+                "INSERT INTO run_log (brand_id, task_type, status, duration_seconds, error) VALUES (?, ?, ?, ?, ?)",
+                (brand_slug, task_type, "timeout", timeout, f"Task exceeded {timeout}s timeout"),
+            )
+            db.commit()
+            if chat_id:
+                await notify_error(bot, task_type, f"Task timed out for {brand_slug} after {timeout}s")
+        except Exception as e:
+            log.error(f"Failed {task_type} for {brand_slug}: {e}")
+            try:
+                db = get_db()
+                error_cat = "unknown"
+                err_str = str(e).lower()
+                if "401" in err_str or "unauthorized" in err_str or "token" in err_str:
+                    error_cat = "auth_error"
+                elif "timeout" in err_str or "timed out" in err_str:
+                    error_cat = "timeout"
+                elif "database" in err_str or "connection" in err_str:
+                    error_cat = "db_error"
+                db.execute(
+                    "INSERT INTO run_log (brand_id, task_type, status, duration_seconds, error, error_category) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (brand_slug, task_type, "failed", 0, str(e)[:500], error_cat),
+                )
+                db.commit()
+            except Exception:
+                log.error(f"Failed to log error for {task_type}/{brand_slug} to run_log")
+            if chat_id:
+                await notify_error(bot, f"{task_type} ({brand_slug})", str(e))
+
+    # Outside the lock — safe to recursively dispatch.
+    if chain_image_generation:
+        await safe_run("image_generation", bot, brand_slug)
 
 
-async def _send_pending_approvals(bot):
-    """Send Telegram notifications for posts awaiting approval."""
+async def _send_pending_approvals(bot, brand_slug: str):
+    """Send Telegram notifications for posts awaiting approval for a brand."""
     db = get_db()
     rows = db.execute(
         "SELECT id, topic, caption, image_url FROM content_queue "
         "WHERE status = 'pending_approval' AND brand_id = ? AND image_url IS NOT NULL",
-        (brands.loader.brand_config.slug,),
+        (brand_slug,),
     ).fetchall()
 
     for row in rows:
@@ -290,8 +320,8 @@ async def _send_pending_approvals(bot):
         )
 
 
-async def _notify_publish_results(bot, task_type: str):
-    """Send per-post Telegram notifications for publish results."""
+async def _notify_publish_results(bot, task_type: str, brand_slug: str):
+    """Send per-post Telegram notifications for this brand's publish results."""
     from db.connection import _is_postgres
     db = get_db()
     content_type = "photo" if task_type == "publish" else "story"
@@ -304,8 +334,8 @@ async def _notify_publish_results(bot, task_type: str):
 
     published = db.execute(
         f"SELECT id, topic, image_url FROM content_queue "
-        f"WHERE status = 'published' AND content_type = ? AND {recent_sql}",
-        (content_type,),
+        f"WHERE status = 'published' AND content_type = ? AND brand_id = ? AND {recent_sql}",
+        (content_type, brand_slug),
     ).fetchall()
     for post in published:
         try:
@@ -315,11 +345,11 @@ async def _notify_publish_results(bot, task_type: str):
         except Exception as e:
             log.warning(f"Failed to send publish notification for post {post['id']}: {e}")
 
-    # Posts that are failed
+    # Posts that are failed for this brand
     failed = db.execute(
         "SELECT id, topic FROM content_queue "
-        "WHERE status = 'failed' AND content_type = ?",
-        (content_type,),
+        "WHERE status = 'failed' AND content_type = ? AND brand_id = ?",
+        (content_type, brand_slug),
     ).fetchall()
     for post in failed:
         try:

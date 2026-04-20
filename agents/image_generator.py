@@ -1,6 +1,6 @@
 from langgraph.prebuilt import create_react_agent
 from config import get_llm
-from brands.loader import brand_config
+import brands.loader as _bl
 
 from tools.image_gen import generate_and_host_image
 from tools.db_tools import db_get_content_queue
@@ -8,7 +8,7 @@ from tools.content_guide import build_image_prompt
 
 
 def _build_system_prompt() -> str:
-    bc = brand_config
+    bc = _bl.brand_config
     return f"""You are the Image Generator for {bc.identity.name_en}, a premium {bc.identity.business_type} in {bc.identity.market}.
 
 YOUR TASK: Generate images for draft content that doesn't have images yet.

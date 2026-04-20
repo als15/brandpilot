@@ -131,7 +131,7 @@ def engagement_advisor_node(state: OrchestratorState) -> dict:
 def content_publisher_node(state: OrchestratorState) -> dict:
     from agents.content_publisher import publish_due_posts
 
-    summary = publish_due_posts("photo")
+    summary = publish_due_posts("photo", state["brand_slug"])
     return {"result_summary": summary, "messages": state.get("messages", [])}
 
 
@@ -157,7 +157,7 @@ def content_reviewer_node(state: OrchestratorState) -> dict:
 def story_publisher_node(state: OrchestratorState) -> dict:
     from agents.content_publisher import publish_due_posts
 
-    summary = publish_due_posts("story")
+    summary = publish_due_posts("story", state["brand_slug"])
     return {"result_summary": summary, "messages": state.get("messages", [])}
 
 
@@ -229,26 +229,33 @@ def _categorize_error(e: Exception) -> str:
     return "unknown"
 
 
-def run_task(task_type: str) -> str:
-    """Run a specific task through the orchestrator. Returns the result summary."""
+def run_task(task_type: str, brand_slug: str) -> str:
+    """Run a specific task through the orchestrator. Returns the result summary.
+
+    ``brand_slug`` is threaded through the LangGraph state so agents and the
+    publisher nodes can scope their DB queries correctly without relying on
+    the global ``brand_config`` singleton (see issue #5).
+    """
     app = build_orchestrator()
-    thread_id = f"{task_type}_{int(time.time())}"
+    thread_id = f"{task_type}_{brand_slug}_{int(time.time())}"
     config = {"configurable": {"thread_id": thread_id}}
 
     start = time.time()
     try:
         result = app.invoke(
-            {"task_type": task_type, "messages": [], "result_summary": ""},
+            {"task_type": task_type, "brand_slug": brand_slug, "messages": [], "result_summary": ""},
             config=config,
         )
         duration = time.time() - start
         summary = result.get("result_summary", "No summary.")
 
-        # Log the run
+        # Log the run with explicit brand_id — the column default is 'capa-co'
+        # and silently bucketing every brand's runs under that was how issue #5
+        # hid for so long.
         db = get_db()
         db.execute(
-            "INSERT INTO run_log (task_type, status, duration_seconds, summary) VALUES (?, ?, ?, ?)",
-            (task_type, "completed", duration, summary[:500]),
+            "INSERT INTO run_log (brand_id, task_type, status, duration_seconds, summary) VALUES (?, ?, ?, ?, ?)",
+            (brand_slug, task_type, "completed", duration, summary[:500]),
         )
         db.commit()
 
@@ -258,8 +265,8 @@ def run_task(task_type: str) -> str:
         category = _categorize_error(e)
         db = get_db()
         db.execute(
-            "INSERT INTO run_log (task_type, status, duration_seconds, error, error_category) VALUES (?, ?, ?, ?, ?)",
-            (task_type, "failed", duration, str(e)[:500], category),
+            "INSERT INTO run_log (brand_id, task_type, status, duration_seconds, error, error_category) VALUES (?, ?, ?, ?, ?, ?)",
+            (brand_slug, task_type, "failed", duration, str(e)[:500], category),
         )
         db.commit()
         raise

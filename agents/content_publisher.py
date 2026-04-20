@@ -7,8 +7,8 @@ import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-import brands.loader
-from brands.loader import brand_config
+import brands.loader as _bl
+from brands.loader import BrandConfig
 from db.connection import get_db
 from tools.instagram import publish_photo_post, publish_story, _published_today
 
@@ -25,14 +25,14 @@ def publish_one(post_id: int, brand_slug: str | None = None) -> tuple[bool, str]
     Returns (success, human-readable message).
     """
     if brand_slug:
-        brands.loader.set_brand(brand_slug)
+        _bl.set_brand(brand_slug)
 
     db = get_db()
     row = db.execute(
         "SELECT id, image_url, caption, hashtags, content_type, "
         "instagram_media_id, status, topic FROM content_queue "
         "WHERE id = ? AND brand_id = ?",
-        (post_id, brands.loader.brand_config.slug),
+        (post_id, _bl.brand_config.slug),
     ).fetchone()
 
     if not row:
@@ -74,9 +74,15 @@ def publish_one(post_id: int, brand_slug: str | None = None) -> tuple[bool, str]
         return False, f"Publish failed: {e}"
 
 
-def publish_due_posts(content_type: str) -> str:
-    """Publish all due approved posts of the given content type. Returns a summary string."""
-    tz = ZoneInfo(brand_config.identity.timezone)
+def publish_due_posts(content_type: str, brand_slug: str) -> str:
+    """Publish all due approved posts for a brand. Returns a summary string.
+
+    Loads its own ``BrandConfig`` from ``brand_slug`` (never reads the global
+    ``brands.loader.brand_config``) so concurrent brand publish jobs can't
+    clobber each other's timezone / content_strategy reads. See issue #5.
+    """
+    bc = BrandConfig.load(brand_slug)
+    tz = ZoneInfo(bc.identity.timezone)
     now = datetime.now(tz)
     today = now.strftime("%Y-%m-%d")
     now_time = now.strftime("%H:%M")
@@ -89,14 +95,14 @@ def publish_due_posts(content_type: str) -> str:
         "WHERE status = 'approved' AND content_type = ? AND brand_id = ? AND image_url IS NOT NULL "
         "AND (scheduled_date < ? OR (scheduled_date = ? AND scheduled_time <= ?)) "
         "ORDER BY scheduled_date ASC, scheduled_time ASC",
-        (content_type, brand_config.slug, today, today, now_time),
+        (content_type, brand_slug, today, today, now_time),
     ).fetchall()
 
     if not rows:
         return f"No due {content_type} posts to publish."
 
-    max_posts = brand_config.content_strategy.max_posts_per_day
-    max_stories = brand_config.content_strategy.max_stories_per_day
+    max_posts = bc.content_strategy.max_posts_per_day
+    max_stories = bc.content_strategy.max_stories_per_day
     max_per_day = max_posts if content_type == "photo" else max_stories
     already_published = _published_today(content_type)
 

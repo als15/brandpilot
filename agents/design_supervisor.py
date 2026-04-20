@@ -1,13 +1,13 @@
 from langgraph.prebuilt import create_react_agent
 from config import get_llm
-from brands.loader import brand_config
+import brands.loader as _bl
 
 from tools.db_tools import db_get_content_queue, db_revise_content_item
 from tools.instagram import get_recent_media
 
 
 def _build_brand_guide() -> str:
-    bc = brand_config
+    bc = _bl.brand_config
     palette_lines = "\n".join(
         f"- {name} {value}" for name, value in bc.visual.color_palette.items()
     )
@@ -29,7 +29,7 @@ VISUAL LANGUAGE:
 
 
 def _build_system_prompt() -> str:
-    bc = brand_config
+    bc = _bl.brand_config
     brand_guide = _build_brand_guide()
 
     return f"""You are the Design Supervisor for {bc.identity.name} ({bc.identity.name_en}), a premium {bc.identity.business_type}.
