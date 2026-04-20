@@ -17,7 +17,11 @@ from brands.loader import init_brand, set_brand, load_all_brands, _list_brands
 from db.schema import init_db
 from db.connection import get_db
 from graph.orchestrator import run_task
-from tools.token_refresh import load_persisted_token, refresh_meta_token
+from tools.token_refresh import (
+    load_persisted_token,
+    refresh_meta_token,
+    token_expires_in_days,
+)
 from telegram_bot import (
     build_telegram_app,
     notify_task_complete,
@@ -358,18 +362,67 @@ async def _health_check_job(bot, scheduler):
         log.error(f"Health check failed: {e}")
 
 
-async def safe_refresh_token(bot):
-    """Refresh Meta token with error notification."""
+async def safe_refresh_token(bot, brand_slug):
+    """Refresh Meta token for a specific brand with error notification.
+
+    Must take the brand slug explicitly — the scheduled job fires in a bare
+    thread context with no guarantee about which brand the global
+    ``brand_config`` singleton is pointing at, so we reset it here before
+    reading credentials or writing to the DB.
+    """
+    set_brand(brand_slug)
     chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
     try:
-        refresh_meta_token()
-        log.info("Meta token refreshed successfully.")
+        refresh_meta_token(brand_slug)
+        log.info(f"Meta token refreshed successfully for {brand_slug}.")
         if chat_id:
-            await bot.send_message(chat_id=chat_id, text="Meta API token refreshed successfully.")
+            await bot.send_message(
+                chat_id=chat_id,
+                text=f"Meta API token refreshed successfully for {brand_slug}.",
+            )
     except Exception as e:
-        log.error(f"Token refresh failed: {e}")
+        log.error(f"Token refresh failed for {brand_slug}: {e}")
         if chat_id:
-            await bot.send_message(chat_id=chat_id, text=f"TOKEN REFRESH FAILED: {e}")
+            await bot.send_message(
+                chat_id=chat_id,
+                text=f"TOKEN REFRESH FAILED ({brand_slug}): {e}",
+            )
+
+
+async def check_token_expiry(bot, chat_id, brand_slug):
+    """Warn via Telegram if the stored token is expired or close to expiry.
+
+    Runs at startup and then daily. Reads expiry from brand_credentials, so it
+    only fires once a refresh has written to the DB — on a fresh deploy we stay
+    silent until the first refresh (we have no reliable source of truth for
+    bootstrap-env-var expiry).
+    """
+    days = token_expires_in_days(brand_slug)
+    if days is None:
+        log.info(f"No persisted token expiry for {brand_slug} yet; skipping check.")
+        return
+
+    if days < 0:
+        msg = (
+            f"TOKEN EXPIRED for {brand_slug} {-days} day(s) ago. "
+            f"Rotate the brand-prefixed META_ACCESS_TOKEN in Railway and restart."
+        )
+        log.error(msg)
+    elif days <= 7:
+        msg = (
+            f"Meta token for {brand_slug} expires in {days} day(s). "
+            f"Scheduled auto-refresh should run soon; verify it does."
+        )
+        log.warning(msg)
+    else:
+        log.info(f"Meta token for {brand_slug} expires in {days} day(s); OK.")
+        return
+
+    if bot and chat_id:
+        try:
+            await bot.send_message(chat_id=chat_id, text=msg)
+        except Exception as e:
+            log.warning(f"Failed to send token expiry alert for {brand_slug}: {e}")
 
 
 def _register_brand_jobs(scheduler, bot, bc):
@@ -425,7 +478,12 @@ def _register_brand_jobs(scheduler, bot, bc):
 
     # Token refresh
     scheduler.add_job(safe_refresh_token, "interval", days=sched.token_refresh_days,
-                      args=[bot], id=f"token_refresh_{slug}")
+                      args=[bot, slug], id=f"token_refresh_{slug}")
+
+    # Daily token expiry check — proactive alert, independent of refresh cadence
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
+    scheduler.add_job(check_token_expiry, "interval", hours=24,
+                      args=[bot, chat_id, slug], id=f"token_expiry_{slug}")
 
 
 async def main():
@@ -435,7 +493,6 @@ async def main():
     bc = init_brand(available[0] if available else None)
     os.makedirs("data", exist_ok=True)
     init_db()
-    load_persisted_token()
 
     all_brands = load_all_brands()
 
@@ -457,6 +514,10 @@ async def main():
 
     for brand in all_brands:
         set_brand(brand.slug)  # loads brand .env (sets TELEGRAM_BOT_TOKEN, CHAT_ID)
+        # Hydrate META_ACCESS_TOKEN from brand_credentials if a persisted
+        # token exists — this is what survives Railway redeploys. Falls
+        # through to the brand-prefixed env var on bootstrap (no DB row yet).
+        load_persisted_token(brand.slug)
         token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
         chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
         if not token:
@@ -487,12 +548,15 @@ async def main():
     for app in telegram_apps:
         app.bot_data["scheduler"] = scheduler
 
-    # Register jobs for each brand with its specific bot
+    # Register jobs for each brand with its specific bot.
+    # set_brand() before registering so env-derived values (chat_id) are
+    # pinned at registration time rather than whatever brand was active last.
     for brand in all_brands:
         bot = brand_bots.get(brand.slug)
         if not bot:
             log.warning(f"No Telegram bot for {brand.slug}, jobs will run without notifications")
             continue
+        set_brand(brand.slug)
         log.info(f"Registering jobs for brand: {brand.slug} (tz={brand.identity.timezone})")
         _register_brand_jobs(scheduler, bot, brand)
 
@@ -540,7 +604,7 @@ async def main():
             await app.start()
             await app.updater.start_polling()
 
-        # Send per-brand online notification
+        # Send per-brand online notification + proactive token expiry check.
         for brand in all_brands:
             bot = brand_bots.get(brand.slug)
             chat_id = brand_chat_ids.get(brand.slug, "")
@@ -552,6 +616,10 @@ async def main():
                     )
                 except Exception as e:
                     log.warning(f"Failed to send online message for {brand.slug}: {e}")
+            try:
+                await check_token_expiry(bot, chat_id, brand.slug)
+            except Exception as e:
+                log.warning(f"Startup token expiry check failed for {brand.slug}: {e}")
 
         web_task = asyncio.create_task(_run_web_server())
 

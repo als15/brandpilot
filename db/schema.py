@@ -104,6 +104,17 @@ def _tables():
             error TEXT
         )
         """,
+        f"""
+        CREATE TABLE IF NOT EXISTS brand_credentials (
+            id {_PK},
+            brand_id TEXT NOT NULL,
+            credential_key TEXT NOT NULL,
+            credential_value TEXT,
+            expires_at TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (brand_id, credential_key)
+        )
+        """,
     ]
 
 
