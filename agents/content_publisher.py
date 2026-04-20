@@ -7,11 +7,71 @@ import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+import brands.loader
+from brands.loader import brand_config
 from db.connection import get_db
 from tools.instagram import publish_photo_post, publish_story, _published_today
-from brands.loader import brand_config
 
 log = logging.getLogger("capaco")
+
+
+def publish_one(post_id: int, brand_slug: str | None = None) -> tuple[bool, str]:
+    """Publish a single post immediately, bypassing schedule and daily-limit gates.
+
+    This is the on-demand counterpart to publish_due_posts() — used by the
+    "Publish Now" button in the dashboard and Telegram. It still enforces
+    idempotency via instagram_media_id so double-clicks can't double-post.
+
+    Returns (success, human-readable message).
+    """
+    if brand_slug:
+        brands.loader.set_brand(brand_slug)
+
+    db = get_db()
+    row = db.execute(
+        "SELECT id, image_url, caption, hashtags, content_type, "
+        "instagram_media_id, status, topic FROM content_queue "
+        "WHERE id = ? AND brand_id = ?",
+        (post_id, brands.loader.brand_config.slug),
+    ).fetchone()
+
+    if not row:
+        return False, f"Post {post_id} not found."
+    if row["instagram_media_id"]:
+        return False, f"Post {post_id} already published to Instagram."
+    if row["status"] not in ("approved", "failed"):
+        return False, f"Post {post_id} is '{row['status']}', not publishable."
+    if not row["image_url"]:
+        return False, f"Post {post_id} has no image_url."
+
+    content_type = row["content_type"]
+    try:
+        if content_type == "photo":
+            caption = ((row["caption"] or "") + "\n" + (row["hashtags"] or "")).strip()
+            result = publish_photo_post.invoke(
+                {"image_url": row["image_url"], "caption": caption}
+            )
+        else:
+            result = publish_story.invoke({"image_url": row["image_url"]})
+
+        media_id = result.get("id", "")
+        db.execute(
+            "UPDATE content_queue SET status = 'published', instagram_media_id = ?, "
+            "published_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (media_id, post_id),
+        )
+        db.commit()
+        log.info(f"Published {content_type} post {post_id} on demand (media_id={media_id})")
+        return True, f"Published (media_id={media_id})"
+    except Exception as e:
+        db.execute(
+            "UPDATE content_queue SET status = 'failed', "
+            "retry_count = retry_count + 1 WHERE id = ?",
+            (post_id,),
+        )
+        db.commit()
+        log.error(f"On-demand publish failed for post {post_id}: {e}")
+        return False, f"Publish failed: {e}"
 
 
 def publish_due_posts(content_type: str) -> str:

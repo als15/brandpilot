@@ -212,6 +212,37 @@ async def approval_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         log.info(f"Post {post_id} re-queued for publish via Telegram.")
         return
 
+    if data.startswith("publishnow_"):
+        import asyncio as _asyncio
+        from agents.content_publisher import publish_one
+
+        post_id = int(data.split("_", 1)[1])
+        row = db.execute(
+            "SELECT topic, status FROM content_queue WHERE id = ?", (post_id,)
+        ).fetchone()
+        if not row:
+            await query.edit_message_text(text=f"Post {post_id} not found.")
+            return
+        if row["status"] not in ("approved", "failed"):
+            await query.edit_message_text(
+                text=f"Post {post_id} is '{row['status']}', cannot publish."
+            )
+            return
+
+        await query.edit_message_text(
+            text=f"Publishing #{post_id} now... ({row['topic']})"
+        )
+        # publish_one hits the IG API — run in a thread so we don't block the
+        # event loop (which also serves other button presses).
+        slug = _brand_loader.brand_config.slug
+        ok, msg = await _asyncio.to_thread(publish_one, post_id, slug)
+        header = "PUBLISHED" if ok else "PUBLISH FAILED"
+        await query.edit_message_text(
+            text=f"{header}: {row['topic']}\nPost #{post_id}\n{msg}"
+        )
+        log.info(f"Post {post_id} publish_now via Telegram: ok={ok} msg={msg}")
+        return
+
     if data.startswith("approve_"):
         post_id = int(data.split("_", 1)[1])
         row = db.execute(
@@ -667,10 +698,11 @@ async def notify_publish_success(bot: Bot, post_id: int, topic: str, image_url: 
 
 
 async def notify_publish_failure(bot: Bot, post_id: int, topic: str):
-    """Notify that a post failed to publish, with a one-tap republish button."""
+    """Notify that a post failed to publish, with one-tap recovery buttons."""
     text = f"PUBLISH FAILED: {topic}\nPost #{post_id}"
     keyboard = InlineKeyboardMarkup([[
         InlineKeyboardButton("Republish", callback_data=f"republish_{post_id}"),
+        InlineKeyboardButton("Publish Now", callback_data=f"publishnow_{post_id}"),
     ]])
     await bot.send_message(chat_id=_chat_id(), text=text, reply_markup=keyboard)
 

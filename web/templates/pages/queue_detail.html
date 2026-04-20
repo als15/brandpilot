@@ -663,12 +663,32 @@
             {% if post.status == 'failed' %}
             <div class="queue-detail-actions-panel">
                 <div class="queue-detail-block-label">Workflow Actions</div>
-                <p>Publishing failed{% if post.retry_count %} after {{ post.retry_count }} attempt{% if post.retry_count != 1 %}s{% endif %}{% endif %}. Re-queue to try again on the next scheduled publish run.</p>
+                <p>Publishing failed{% if post.retry_count %} after {{ post.retry_count }} attempt{% if post.retry_count != 1 %}s{% endif %}{% endif %}. Re-queue for the next scheduled run, or publish immediately.</p>
 
                 <div class="flex gap-2 mt-4 flex-wrap" id="approval-actions">
                     <button class="btn btn-primary" id="btn-republish"
                             onclick="showInlineConfirm(this, 'Re-queue this post for publishing?', '/queue/{{ post.id }}/republish', '#approval-actions')">
                         Republish
+                    </button>
+                    {% if post.image_url %}
+                    <button class="btn btn-warning" id="btn-publish-now-failed"
+                            onclick="showInlineConfirm(this, 'Publish this post to Instagram right now?', '/queue/{{ post.id }}/publish-now', '#approval-actions')">
+                        Publish Now
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if post.status == 'approved' and post.image_url %}
+            <div class="queue-detail-actions-panel">
+                <div class="queue-detail-block-label">Workflow Actions</div>
+                <p>Approved and waiting for the next scheduled publish run. Publish immediately to override the schedule.</p>
+
+                <div class="flex gap-2 mt-4 flex-wrap" id="approval-actions">
+                    <button class="btn btn-primary" id="btn-publish-now"
+                            onclick="showInlineConfirm(this, 'Publish this post to Instagram right now?', '/queue/{{ post.id }}/publish-now', '#approval-actions')">
+                        Publish Now
                     </button>
                 </div>
             </div>

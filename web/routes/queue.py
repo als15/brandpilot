@@ -88,7 +88,7 @@ async def queue_page(request: Request):
     from web.routes.dashboard import _global_stats
 
     brand_id = get_dashboard_brand(request)
-    view = request.query_params.get("view", "grid")
+    view = request.query_params.get("view", "timeline")
     status_filter = request.query_params.get("status", "")
     type_filter = request.query_params.get("type", "")
 
@@ -272,6 +272,43 @@ async def republish_post(request: Request, post_id: int):
         (post_id, brand_id),
     )
     return HTMLResponse('<span class="badge badge-approved">Re-queued</span>')
+
+
+def _run_publish_now(post_id: int, brand_slug: str) -> None:
+    """BackgroundTasks entry point — publish_one updates the post's status
+    on both success and failure, so the outcome is visible via the dashboard
+    even if this raises."""
+    from agents.content_publisher import publish_one
+
+    try:
+        publish_one(post_id, brand_slug=brand_slug)
+    except Exception as e:
+        log.exception(f"publish_now background task crashed for post {post_id}: {e}")
+
+
+@router.post("/queue/{post_id}/publish-now", response_class=HTMLResponse)
+async def publish_now(request: Request, post_id: int, background_tasks: BackgroundTasks):
+    """Publish a post to Instagram immediately, bypassing the scheduler.
+
+    Runs the actual publish in a background task because the Instagram API
+    round-trip can take 5–15s — we don't want to block the HTMX swap on it.
+    """
+    brand_id = get_dashboard_brand(request)
+    post = await query_one(
+        "SELECT status, image_url FROM content_queue WHERE id = ? AND brand_id = ?",
+        (post_id, brand_id),
+    )
+    if not post:
+        return HTMLResponse('<span class="badge badge-failed">Not found</span>')
+    if post["status"] not in ("approved", "failed"):
+        return HTMLResponse(
+            f'<span class="badge badge-failed">Not publishable ({post["status"]})</span>'
+        )
+    if not post["image_url"]:
+        return HTMLResponse('<span class="badge badge-failed">No image</span>')
+
+    background_tasks.add_task(_run_publish_now, post_id, brand_id)
+    return HTMLResponse('<span class="badge badge-approved">Publishing…</span>')
 
 
 @router.post("/queue/{post_id}/convert-type", response_class=HTMLResponse)
