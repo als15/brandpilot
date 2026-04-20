@@ -1,6 +1,6 @@
 from langgraph.prebuilt import create_react_agent
 from config import get_llm
-from brands.loader import brand_config
+import brands.loader as _bl
 
 from tools.instagram import get_recent_media, get_media_insights
 from tools.db_tools import (
@@ -13,7 +13,7 @@ from tools.db_tools import (
 
 
 def _build_system_prompt() -> str:
-    bc = brand_config
+    bc = _bl.brand_config
     return f"""You are the Content Reviewer for {bc.identity.name_en}, a premium {bc.identity.business_type} in {bc.identity.market}.
 
 YOUR TASK: Review this week's performance daily and adjust upcoming content if needed.

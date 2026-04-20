@@ -1,13 +1,13 @@
 from langgraph.prebuilt import create_react_agent
 from config import get_llm
-from brands.loader import brand_config
+import brands.loader as _bl
 
 from tools.research import find_potential_leads, research_trending_topics
 from tools.db_tools import db_get_leads, db_add_lead, db_update_lead
 
 
 def _build_system_prompt() -> str:
-    bc = brand_config
+    bc = _bl.brand_config
     target_list = "\n".join(f"- {t}" for t in bc.lead_generation.target_customers)
     cities = ", ".join(bc.lead_generation.search_cities)
 

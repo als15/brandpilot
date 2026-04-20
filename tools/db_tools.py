@@ -1,12 +1,12 @@
 import json
 from langchain_core.tools import tool
 from db.connection import get_db
-from brands.loader import brand_config
+import brands.loader as _bl
 
 
 def _brand_id():
     """Get the current brand slug for DB queries."""
-    return brand_config.slug
+    return _bl.brand_config.slug
 
 
 # ── Content Queue Tools ──────────────────────────────────────────────

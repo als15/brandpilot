@@ -1,6 +1,6 @@
 from langgraph.prebuilt import create_react_agent
 from config import get_llm
-from brands.loader import brand_config
+import brands.loader as _bl
 
 from tools.research import research_trending_topics
 from tools.db_tools import (
@@ -11,7 +11,7 @@ from tools.db_tools import (
 
 
 def _build_system_prompt() -> str:
-    bc = brand_config
+    bc = _bl.brand_config
     return f"""You are the Engagement Advisor for {bc.identity.name_en}, a {bc.identity.business_type}.
 
 YOUR TASK: Suggest Instagram engagement actions that build relationships and visibility

@@ -1,6 +1,6 @@
 from langgraph.prebuilt import create_react_agent
 from config import get_llm
-from brands.loader import brand_config
+import brands.loader as _bl
 
 from tools.instagram import get_recent_media, get_instagram_profile
 from tools.db_tools import db_get_content_queue, db_get_analytics_summary, db_get_post_performance
@@ -9,7 +9,7 @@ from tools.content_guide import get_menu_items
 
 
 def _build_system_prompt(menu_items: str) -> str:
-    bc = brand_config
+    bc = _bl.brand_config
     sc = bc.seasonal_calendar
 
     return f"""You are the Culinary Supervisor & Manager for {bc.identity.name} ({bc.identity.name_en}).

@@ -100,7 +100,7 @@ def main():
         if task_arg in TASKS:
             task_type = TASKS[task_arg]
             print(f"[{bc.identity.name_en}] Running task: {task_type}...")
-            summary = run_task(task_type)
+            summary = run_task(task_type, bc.slug)
             print(f"\nResult:\n{summary}")
             return
 
