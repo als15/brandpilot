@@ -660,6 +660,20 @@
             {% endif %}
             {% endif %}
 
+            {% if post.status == 'failed' %}
+            <div class="queue-detail-actions-panel">
+                <div class="queue-detail-block-label">Workflow Actions</div>
+                <p>Publishing failed{% if post.retry_count %} after {{ post.retry_count }} attempt{% if post.retry_count != 1 %}s{% endif %}{% endif %}. Re-queue to try again on the next scheduled publish run.</p>
+
+                <div class="flex gap-2 mt-4 flex-wrap" id="approval-actions">
+                    <button class="btn btn-primary" id="btn-republish"
+                            onclick="showInlineConfirm(this, 'Re-queue this post for publishing?', '/queue/{{ post.id }}/republish', '#approval-actions')">
+                        Republish
+                    </button>
+                </div>
+            </div>
+            {% endif %}
+
             {% if post.published_at %}
             <div class="queue-detail-published">
                 <div>

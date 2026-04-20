@@ -90,3 +90,57 @@ class QueueDetailTests(unittest.TestCase):
         self.assertIn('id="visual-direction-display"', response.text)
         self.assertIn('id="content-pillar-display"', response.text)
 
+    def test_queue_detail_shows_republish_button_for_failed_posts(self):
+        app = create_app(scheduler=SimpleNamespace(get_jobs=lambda: []))
+
+        async def fake_query_one(sql, params):
+            if "SELECT * FROM content_queue" in sql:
+                return {
+                    "id": 56, "brand_id": 1, "status": "failed",
+                    "image_url": "https://example.com/img.jpg", "caption": "c",
+                    "topic": "t", "hashtags": "", "visual_direction": "",
+                    "content_pillar": "product", "content_type": "post",
+                    "scheduled_date": "2026-04-20", "scheduled_time": "09:00",
+                    "notes": "", "instagram_media_id": None, "published_at": None,
+                    "retry_count": 3,
+                }
+            raise AssertionError(f"Unexpected query: {sql}")
+
+        async def fake_stats(_brand_id):
+            return {"followers": 0, "pending_count": 0, "approved_count": 0, "last_run_short": ""}
+
+        with (
+            patch("web.routes.queue.query_one", fake_query_one),
+            patch("web.routes.queue.get_dashboard_brand", lambda request: 1),
+            patch("web.routes.queue.get_brand_context", lambda request: {}),
+            patch("web.routes.dashboard._global_stats", fake_stats),
+        ):
+            client = TestClient(app)
+            response = client.get("/queue/56")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("/queue/56/republish", response.text)
+        self.assertIn("after 3 attempts", response.text)
+
+    def test_republish_endpoint_resets_status_and_retry_count(self):
+        app = create_app(scheduler=SimpleNamespace(get_jobs=lambda: []))
+        captured = {}
+
+        async def fake_execute(sql, params):
+            captured["sql"] = sql
+            captured["params"] = params
+
+        with (
+            patch("web.routes.queue.execute", fake_execute),
+            patch("web.routes.queue.get_dashboard_brand", lambda request: "mila"),
+        ):
+            client = TestClient(app)
+            response = client.post("/queue/56/republish")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Re-queued", response.text)
+        self.assertIn("status = 'approved'", captured["sql"])
+        self.assertIn("retry_count = 0", captured["sql"])
+        self.assertIn("status = 'failed'", captured["sql"])
+        self.assertEqual(captured["params"], (56, "mila"))
+

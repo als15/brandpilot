@@ -188,6 +188,30 @@ async def approval_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         log.info(f"Post {post_id} rejected via Telegram.")
         return
 
+    if data.startswith("republish_"):
+        post_id = int(data.split("_", 1)[1])
+        row = db.execute(
+            "SELECT topic, status FROM content_queue WHERE id = ?", (post_id,)
+        ).fetchone()
+        if not row:
+            await query.edit_message_text(text=f"Post {post_id} not found.")
+            return
+        if row["status"] != "failed":
+            await query.edit_message_text(
+                text=f"Post {post_id} is '{row['status']}', not failed — nothing to republish."
+            )
+            return
+        db.execute(
+            "UPDATE content_queue SET status = 'approved', retry_count = 0 WHERE id = ?",
+            (post_id,),
+        )
+        db.commit()
+        await query.edit_message_text(
+            text=f"RE-QUEUED: {row['topic']}\nPost #{post_id}\nWill publish on the next scheduled run."
+        )
+        log.info(f"Post {post_id} re-queued for publish via Telegram.")
+        return
+
     if data.startswith("approve_"):
         post_id = int(data.split("_", 1)[1])
         row = db.execute(
@@ -643,9 +667,12 @@ async def notify_publish_success(bot: Bot, post_id: int, topic: str, image_url: 
 
 
 async def notify_publish_failure(bot: Bot, post_id: int, topic: str):
-    """Notify that a post failed to publish."""
+    """Notify that a post failed to publish, with a one-tap republish button."""
     text = f"PUBLISH FAILED: {topic}\nPost #{post_id}"
-    await bot.send_message(chat_id=_chat_id(), text=text)
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton("Republish", callback_data=f"republish_{post_id}"),
+    ]])
+    await bot.send_message(chat_id=_chat_id(), text=text, reply_markup=keyboard)
 
 
 # ── Health Command ──────────────────────────────────────────────────

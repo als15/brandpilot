@@ -257,6 +257,23 @@ async def reject_post(request: Request, post_id: int):
     return HTMLResponse('<span class="badge badge-rejected">Rejected</span>')
 
 
+@router.post("/queue/{post_id}/republish", response_class=HTMLResponse)
+async def republish_post(request: Request, post_id: int):
+    """Re-queue a failed post for publishing.
+
+    Resets status to 'approved' and retry_count to 0. The image has already
+    been upscaled (that happens at approval), so we don't need to rerun it.
+    The WHERE clause gates on status='failed' so double-clicks are no-ops.
+    """
+    brand_id = get_dashboard_brand(request)
+    await execute(
+        "UPDATE content_queue SET status = 'approved', retry_count = 0 "
+        "WHERE id = ? AND status = 'failed' AND brand_id = ?",
+        (post_id, brand_id),
+    )
+    return HTMLResponse('<span class="badge badge-approved">Re-queued</span>')
+
+
 @router.post("/queue/{post_id}/convert-type", response_class=HTMLResponse)
 async def convert_content_type(request: Request, post_id: int):
     """Toggle a post between feed photo and story formats.
