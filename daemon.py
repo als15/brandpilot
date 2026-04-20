@@ -606,7 +606,10 @@ async def main():
     import uvicorn
     from web import create_app
 
-    web_app = create_app(scheduler=scheduler, bot=primary_bot, safe_run_fn=safe_run)
+    web_app = create_app(
+        scheduler=scheduler, bot=primary_bot, safe_run_fn=safe_run,
+        brand_bots=brand_bots, brand_chat_ids=brand_chat_ids,
+    )
     port = int(os.environ.get("PORT", 8000))
     uvi_config = uvicorn.Config(web_app, host="0.0.0.0", port=port, log_level="info")
     uvi_server = uvicorn.Server(uvi_config)

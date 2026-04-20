@@ -15,14 +15,23 @@ from tools.instagram import publish_photo_post, publish_story, _published_today
 log = logging.getLogger("capaco")
 
 
-def publish_one(post_id: int, brand_slug: str | None = None) -> tuple[bool, str]:
+def publish_one(post_id: int, brand_slug: str | None = None) -> dict:
     """Publish a single post immediately, bypassing schedule and daily-limit gates.
 
     This is the on-demand counterpart to publish_due_posts() — used by the
     "Publish Now" button in the dashboard and Telegram. It still enforces
     idempotency via instagram_media_id so double-clicks can't double-post.
 
-    Returns (success, human-readable message).
+    Returns a dict with keys:
+        ok: bool — whether publishing succeeded
+        message: str — human-readable result
+        topic: str — the post's topic (empty if post not found)
+        image_url: str — the post's image URL (empty if n/a)
+        content_type: str — 'photo' or 'story' (empty if n/a)
+
+    Callers use ``topic``/``image_url`` to send downstream notifications
+    (see web/routes/queue.py _run_publish_now and the Telegram publishnow
+    callback).
     """
     if brand_slug:
         _bl.set_brand(brand_slug)
@@ -36,23 +45,31 @@ def publish_one(post_id: int, brand_slug: str | None = None) -> tuple[bool, str]
     ).fetchone()
 
     if not row:
-        return False, f"Post {post_id} not found."
-    if row["instagram_media_id"]:
-        return False, f"Post {post_id} already published to Instagram."
-    if row["status"] not in ("approved", "failed"):
-        return False, f"Post {post_id} is '{row['status']}', not publishable."
-    if not row["image_url"]:
-        return False, f"Post {post_id} has no image_url."
+        return {"ok": False, "message": f"Post {post_id} not found.",
+                "topic": "", "image_url": "", "content_type": ""}
 
-    content_type = row["content_type"]
+    topic = row["topic"] or ""
+    image_url = row["image_url"] or ""
+    content_type = row["content_type"] or ""
+
+    if row["instagram_media_id"]:
+        return {"ok": False, "message": f"Post {post_id} already published to Instagram.",
+                "topic": topic, "image_url": image_url, "content_type": content_type}
+    if row["status"] not in ("approved", "failed"):
+        return {"ok": False, "message": f"Post {post_id} is '{row['status']}', not publishable.",
+                "topic": topic, "image_url": image_url, "content_type": content_type}
+    if not image_url:
+        return {"ok": False, "message": f"Post {post_id} has no image_url.",
+                "topic": topic, "image_url": image_url, "content_type": content_type}
+
     try:
         if content_type == "photo":
             caption = ((row["caption"] or "") + "\n" + (row["hashtags"] or "")).strip()
             result = publish_photo_post.invoke(
-                {"image_url": row["image_url"], "caption": caption}
+                {"image_url": image_url, "caption": caption}
             )
         else:
-            result = publish_story.invoke({"image_url": row["image_url"]})
+            result = publish_story.invoke({"image_url": image_url})
 
         media_id = result.get("id", "")
         db.execute(
@@ -62,7 +79,8 @@ def publish_one(post_id: int, brand_slug: str | None = None) -> tuple[bool, str]
         )
         db.commit()
         log.info(f"Published {content_type} post {post_id} on demand (media_id={media_id})")
-        return True, f"Published (media_id={media_id})"
+        return {"ok": True, "message": f"Published (media_id={media_id})",
+                "topic": topic, "image_url": image_url, "content_type": content_type}
     except Exception as e:
         db.execute(
             "UPDATE content_queue SET status = 'failed', "
@@ -71,7 +89,8 @@ def publish_one(post_id: int, brand_slug: str | None = None) -> tuple[bool, str]
         )
         db.commit()
         log.error(f"On-demand publish failed for post {post_id}: {e}")
-        return False, f"Publish failed: {e}"
+        return {"ok": False, "message": f"Publish failed: {e}",
+                "topic": topic, "image_url": image_url, "content_type": content_type}
 
 
 def publish_due_posts(content_type: str, brand_slug: str) -> str:
