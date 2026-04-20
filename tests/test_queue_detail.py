@@ -1,6 +1,7 @@
+import asyncio
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -213,9 +214,15 @@ class QueueDetailTests(unittest.TestCase):
         async def fake_query_one(sql, params):
             return {"status": "approved", "image_url": "https://example.com/img.jpg"}
 
-        def fake_run_publish_now(post_id, brand_slug):
+        async def fake_run_publish_now(post_id, brand_slug, bot=None, chat_id=""):
             invoked["post_id"] = post_id
             invoked["brand_slug"] = brand_slug
+            invoked["bot"] = bot
+            invoked["chat_id"] = chat_id
+
+        fake_bot = object()
+        app.state.brand_bots = {"mila": fake_bot}
+        app.state.brand_chat_ids = {"mila": "12345"}
 
         with (
             patch("web.routes.queue.query_one", fake_query_one),
@@ -227,7 +234,40 @@ class QueueDetailTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Publishing", response.text)
-        self.assertEqual(invoked, {"post_id": 77, "brand_slug": "mila"})
+        self.assertEqual(invoked["post_id"], 77)
+        self.assertEqual(invoked["brand_slug"], "mila")
+        self.assertIs(invoked["bot"], fake_bot)
+        self.assertEqual(invoked["chat_id"], "12345")
+
+    def test_publish_now_endpoint_falls_back_to_primary_bot_if_no_per_brand(self):
+        """When app.state.brand_bots doesn't have this brand, fall back to
+        app.state.bot (the primary)."""
+        app = create_app(scheduler=SimpleNamespace(get_jobs=lambda: []))
+        invoked = {}
+
+        async def fake_query_one(sql, params):
+            return {"status": "approved", "image_url": "https://example.com/img.jpg"}
+
+        async def fake_run_publish_now(post_id, brand_slug, bot=None, chat_id=""):
+            invoked["bot"] = bot
+            invoked["chat_id"] = chat_id
+
+        primary_bot = object()
+        app.state.bot = primary_bot
+        app.state.brand_bots = {}  # no per-brand bot
+        app.state.brand_chat_ids = {}
+
+        with (
+            patch("web.routes.queue.query_one", fake_query_one),
+            patch("web.routes.queue.get_dashboard_brand", lambda request: "mila"),
+            patch("web.routes.queue._run_publish_now", fake_run_publish_now),
+        ):
+            client = TestClient(app)
+            response = client.post("/queue/77/publish-now")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIs(invoked["bot"], primary_bot)
+        self.assertEqual(invoked["chat_id"], "")
 
     def test_publish_now_endpoint_rejects_published_posts(self):
         app = create_app(scheduler=SimpleNamespace(get_jobs=lambda: []))
@@ -244,6 +284,77 @@ class QueueDetailTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Not publishable", response.text)
+
+    def test_run_publish_now_sends_success_notification(self):
+        """After a successful on-demand publish, _run_publish_now must fire
+        notify_publish_success with the post's topic + image + the passed-in
+        chat_id (not env-derived)."""
+        from web.routes.queue import _run_publish_now
+
+        fake_publish = lambda post_id, brand_slug: {
+            "ok": True, "message": "Published (media_id=abc)",
+            "topic": "vanilla cone", "image_url": "https://example.com/img.jpg",
+            "content_type": "photo",
+        }
+        fake_success = AsyncMock()
+        fake_failure = AsyncMock()
+        fake_bot = object()
+
+        with (
+            patch("agents.content_publisher.publish_one", fake_publish),
+            patch("telegram_bot.notify_publish_success", fake_success),
+            patch("telegram_bot.notify_publish_failure", fake_failure),
+        ):
+            asyncio.run(_run_publish_now(99, "mila", fake_bot, "54321"))
+
+        fake_success.assert_awaited_once()
+        args, kwargs = fake_success.call_args
+        self.assertIs(args[0], fake_bot)
+        self.assertEqual(args[1], 99)
+        self.assertEqual(args[2], "vanilla cone")
+        self.assertEqual(args[3], "https://example.com/img.jpg")
+        self.assertEqual(kwargs.get("chat_id"), "54321")
+        fake_failure.assert_not_awaited()
+
+    def test_run_publish_now_sends_failure_notification(self):
+        from web.routes.queue import _run_publish_now
+
+        fake_publish = lambda post_id, brand_slug: {
+            "ok": False, "message": "Publish failed: IG API 400",
+            "topic": "vanilla cone", "image_url": "https://example.com/img.jpg",
+            "content_type": "photo",
+        }
+        fake_success = AsyncMock()
+        fake_failure = AsyncMock()
+        fake_bot = object()
+
+        with (
+            patch("agents.content_publisher.publish_one", fake_publish),
+            patch("telegram_bot.notify_publish_success", fake_success),
+            patch("telegram_bot.notify_publish_failure", fake_failure),
+        ):
+            asyncio.run(_run_publish_now(99, "mila", fake_bot, "54321"))
+
+        fake_failure.assert_awaited_once()
+        fake_success.assert_not_awaited()
+
+    def test_run_publish_now_skips_notification_without_bot(self):
+        """If no bot was passed (e.g. dev server), just run publish — no crash."""
+        from web.routes.queue import _run_publish_now
+
+        fake_publish = lambda post_id, brand_slug: {
+            "ok": True, "message": "Published", "topic": "t",
+            "image_url": "", "content_type": "photo",
+        }
+        fake_success = AsyncMock()
+
+        with (
+            patch("agents.content_publisher.publish_one", fake_publish),
+            patch("telegram_bot.notify_publish_success", fake_success),
+        ):
+            asyncio.run(_run_publish_now(99, "mila", None, ""))
+
+        fake_success.assert_not_awaited()
 
     def test_publish_now_endpoint_rejects_missing_image(self):
         app = create_app(scheduler=SimpleNamespace(get_jobs=lambda: []))

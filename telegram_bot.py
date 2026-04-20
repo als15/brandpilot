@@ -235,12 +235,12 @@ async def approval_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # publish_one hits the IG API — run in a thread so we don't block the
         # event loop (which also serves other button presses).
         slug = _brand_loader.brand_config.slug
-        ok, msg = await _asyncio.to_thread(publish_one, post_id, slug)
-        header = "PUBLISHED" if ok else "PUBLISH FAILED"
+        result = await _asyncio.to_thread(publish_one, post_id, slug)
+        header = "PUBLISHED" if result["ok"] else "PUBLISH FAILED"
         await query.edit_message_text(
-            text=f"{header}: {row['topic']}\nPost #{post_id}\n{msg}"
+            text=f"{header}: {row['topic']}\nPost #{post_id}\n{result['message']}"
         )
-        log.info(f"Post {post_id} publish_now via Telegram: ok={ok} msg={msg}")
+        log.info(f"Post {post_id} publish_now via Telegram: ok={result['ok']} msg={result['message']}")
         return
 
     if data.startswith("approve_"):
@@ -684,27 +684,37 @@ async def notify_error(bot: Bot, task_type: str, error_msg: str):
     await bot.send_message(chat_id=_chat_id(), text=text)
 
 
-async def notify_publish_success(bot: Bot, post_id: int, topic: str, image_url: str):
-    """Notify that a post was published to Instagram."""
+async def notify_publish_success(bot: Bot, post_id: int, topic: str, image_url: str,
+                                 chat_id: str | None = None):
+    """Notify that a post was published to Instagram.
+
+    ``chat_id`` defaults to ``os.environ['TELEGRAM_CHAT_ID']`` — but env is
+    process-global and can be mutated by other set_brand() calls between
+    when this function is scheduled and when it runs, so pass it explicitly
+    for on-demand publishes triggered from the web dashboard.
+    """
+    cid = chat_id or _chat_id()
     text = f"Published: {topic}\nPost #{post_id}"
     try:
         if image_url:
-            await bot.send_photo(chat_id=_chat_id(), photo=image_url, caption=text)
+            await bot.send_photo(chat_id=cid, photo=image_url, caption=text)
         else:
-            await bot.send_message(chat_id=_chat_id(), text=text)
+            await bot.send_message(chat_id=cid, text=text)
     except Exception:
         # Fallback to text if image send fails
-        await bot.send_message(chat_id=_chat_id(), text=text)
+        await bot.send_message(chat_id=cid, text=text)
 
 
-async def notify_publish_failure(bot: Bot, post_id: int, topic: str):
+async def notify_publish_failure(bot: Bot, post_id: int, topic: str,
+                                 chat_id: str | None = None):
     """Notify that a post failed to publish, with one-tap recovery buttons."""
+    cid = chat_id or _chat_id()
     text = f"PUBLISH FAILED: {topic}\nPost #{post_id}"
     keyboard = InlineKeyboardMarkup([[
         InlineKeyboardButton("Republish", callback_data=f"republish_{post_id}"),
         InlineKeyboardButton("Publish Now", callback_data=f"publishnow_{post_id}"),
     ]])
-    await bot.send_message(chat_id=_chat_id(), text=text, reply_markup=keyboard)
+    await bot.send_message(chat_id=cid, text=text, reply_markup=keyboard)
 
 
 # ── Health Command ──────────────────────────────────────────────────

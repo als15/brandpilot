@@ -274,16 +274,53 @@ async def republish_post(request: Request, post_id: int):
     return HTMLResponse('<span class="badge badge-approved">Re-queued</span>')
 
 
-def _run_publish_now(post_id: int, brand_slug: str) -> None:
-    """BackgroundTasks entry point — publish_one updates the post's status
-    on both success and failure, so the outcome is visible via the dashboard
-    even if this raises."""
+async def _run_publish_now(post_id: int, brand_slug: str, bot=None, chat_id: str = ""):
+    """Async BackgroundTasks entry point for on-demand publishing.
+
+    Runs ``publish_one`` in a thread (so the event loop stays responsive for
+    other dashboard requests), then — if a Telegram bot + chat_id were passed
+    — fires the same success/failure notification the scheduled publish
+    path sends. ``chat_id`` is passed explicitly rather than read from
+    ``os.environ`` because the background task runs independently of
+    ``set_brand()`` serialization and env can be whatever a concurrent task
+    last set it to.
+    """
+    import asyncio
     from agents.content_publisher import publish_one
+    from telegram_bot import notify_publish_success, notify_publish_failure
 
     try:
-        publish_one(post_id, brand_slug=brand_slug)
+        result = await asyncio.to_thread(publish_one, post_id, brand_slug)
     except Exception as e:
         log.exception(f"publish_now background task crashed for post {post_id}: {e}")
+        return
+
+    if not bot or not chat_id:
+        return
+
+    try:
+        if result["ok"]:
+            await notify_publish_success(
+                bot, post_id, result["topic"], result["image_url"], chat_id=chat_id,
+            )
+        else:
+            await notify_publish_failure(
+                bot, post_id, result["topic"], chat_id=chat_id,
+            )
+    except Exception as e:
+        log.warning(f"Failed to send publish-now notification for post {post_id}: {e}")
+
+
+def _bot_and_chat_for_brand(request: Request, brand_slug: str):
+    """Resolve the Telegram bot + chat_id for a brand from app.state.
+
+    Falls back to the primary bot when a brand-specific bot isn't registered
+    (e.g. the dev server has no per-brand bots)."""
+    brand_bots = getattr(request.app.state, "brand_bots", {}) or {}
+    brand_chat_ids = getattr(request.app.state, "brand_chat_ids", {}) or {}
+    bot = brand_bots.get(brand_slug) or getattr(request.app.state, "bot", None)
+    chat_id = brand_chat_ids.get(brand_slug, "")
+    return bot, chat_id
 
 
 @router.post("/queue/{post_id}/publish-now", response_class=HTMLResponse)
@@ -292,6 +329,8 @@ async def publish_now(request: Request, post_id: int, background_tasks: Backgrou
 
     Runs the actual publish in a background task because the Instagram API
     round-trip can take 5–15s — we don't want to block the HTMX swap on it.
+    After publish completes, sends the same Telegram notification the
+    scheduler path sends, so the user doesn't have to watch the dashboard.
     """
     brand_id = get_dashboard_brand(request)
     post = await query_one(
@@ -307,7 +346,8 @@ async def publish_now(request: Request, post_id: int, background_tasks: Backgrou
     if not post["image_url"]:
         return HTMLResponse('<span class="badge badge-failed">No image</span>')
 
-    background_tasks.add_task(_run_publish_now, post_id, brand_id)
+    bot, chat_id = _bot_and_chat_for_brand(request, brand_id)
+    background_tasks.add_task(_run_publish_now, post_id, brand_id, bot, chat_id)
     return HTMLResponse('<span class="badge badge-approved">Publishing…</span>')
 
 

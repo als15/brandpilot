@@ -27,7 +27,7 @@ def _datefmt(value, fmt="%m-%d %H:%M"):
 templates.env.filters["datefmt"] = _datefmt
 
 
-def create_app(scheduler=None, bot=None, safe_run_fn=None, brand_bots=None):
+def create_app(scheduler=None, bot=None, safe_run_fn=None, brand_bots=None, brand_chat_ids=None):
     """Build the FastAPI app. Receives scheduler/bot from daemon for live access."""
     from brands.loader import brand_config, _list_brands, BrandConfig
 
@@ -38,6 +38,7 @@ def create_app(scheduler=None, bot=None, safe_run_fn=None, brand_bots=None):
     app.state.bot = bot
     app.state.safe_run = safe_run_fn
     app.state.brand_bots = brand_bots or {}
+    app.state.brand_chat_ids = brand_chat_ids or {}
 
     # Store available brands for the brand selector
     app.state.available_brands = _list_brands()
