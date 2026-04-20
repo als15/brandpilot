@@ -54,7 +54,7 @@ def content_strategist_node(state: OrchestratorState) -> dict:
     # Get culinary guidance first
     culinary_brief = _get_culinary_brief()
 
-    return _run_agent(
+    result = _run_agent(
         create_content_strategist,
         "Plan content for this week. Check what we already have in the queue, "
         "review recent analytics, check our Instagram performance. "
@@ -65,6 +65,67 @@ def content_strategist_node(state: OrchestratorState) -> dict:
         f"--- CULINARY BRIEF ---\n{culinary_brief}\n--- END BRIEF ---",
         state,
     )
+
+    # The LLM frequently double-books days despite the prompt saying otherwise.
+    # Apply a deterministic pass so each week respects "≤1 photo/day" and
+    # "1 story/day" without having to beg the model to count.
+    _normalize_planned_weeks(state["brand_slug"])
+
+    return result
+
+
+def _normalize_planned_weeks(brand_slug: str) -> None:
+    """Rebalance upcoming weeks so each day has at most one photo and at most
+    one story.
+
+    Loads the brand config fresh from ``brand_slug`` rather than reading the
+    global singleton — matches the brand-isolation pattern from issue #5 /
+    PR #6 so concurrent brand runs can't clobber each other.
+    """
+    from datetime import date, timedelta
+    from brands.loader import BrandConfig
+    from tools.schedule_normalizer import compute_reschedule, current_week_start
+
+    bc = BrandConfig.load(brand_slug)
+    photo_time = (bc.content_strategy.feed_post_times or ["07:00"])[0]
+    story_time = bc.content_strategy.story_time or "09:00"
+    photo_days = bc.content_strategy.weekly_feed_posts or 5
+    story_days = bc.content_strategy.weekly_stories or 7
+
+    db = get_db()
+    today = date.today()
+    # Cover the week containing today and the next one — planning typically
+    # fills one, but items can spill across the boundary.
+    weeks = [current_week_start(today), current_week_start(today) + timedelta(weeks=1)]
+
+    for week_start in weeks:
+        week_end = week_start + timedelta(days=6)
+        rows = db.execute(
+            "SELECT id, content_type, scheduled_date, scheduled_time, status "
+            "FROM content_queue "
+            "WHERE brand_id = ? AND scheduled_date >= ? AND scheduled_date <= ?",
+            (brand_slug, week_start.isoformat(), week_end.isoformat()),
+        ).fetchall()
+        posts = [dict(r) for r in rows]
+        if not posts:
+            continue
+
+        moves = compute_reschedule(
+            posts,
+            week_start,
+            photo_time=photo_time,
+            story_time=story_time,
+            photo_days=photo_days,
+            story_days=story_days,
+        )
+        for post_id, new_date, new_time in moves:
+            db.execute(
+                "UPDATE content_queue SET scheduled_date = ?, scheduled_time = ? "
+                "WHERE id = ? AND brand_id = ?",
+                (new_date, new_time, post_id, brand_slug),
+            )
+        if moves:
+            db.commit()
 
 
 def design_review_node(state: OrchestratorState) -> dict:
