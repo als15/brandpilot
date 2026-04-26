@@ -50,8 +50,12 @@ def create_app(scheduler=None, bot=None, safe_run_fn=None, brand_bots=None, bran
     from web.auth import AuthMiddleware
 
     secret = os.environ.get("DASHBOARD_SECRET", "")
-    if secret:
-        app.add_middleware(AuthMiddleware, secret=secret)
+    if not secret:
+        raise RuntimeError(
+            "DASHBOARD_SECRET is not set. The dashboard refuses to start without "
+            "auth — set DASHBOARD_SECRET (env var or .env) before launching."
+        )
+    app.add_middleware(AuthMiddleware, secret=secret)
 
     # Register routes
     from web.routes import dashboard, queue, logs, schedule, analytics, leads, engagement, system
